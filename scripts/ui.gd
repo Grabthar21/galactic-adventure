@@ -361,7 +361,7 @@ func show_title() -> void:
 	name_edit.text_submitted.connect(func(_t): _start())
 	title.add_child(name_edit)
 	var test_btn := Button.new()
-	test_btn.text = "Test: Arthur from new parts sheet"
+	test_btn.text = "Test: Arthur cut-out rig (side walk)"
 	test_btn.focus_mode = Control.FOCUS_NONE
 	test_btn.add_theme_font_size_override("font_size", 16)
 	test_btn.size = Vector2(330, 34)

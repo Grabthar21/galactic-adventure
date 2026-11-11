@@ -58,6 +58,8 @@ def load_parts(cfg):
     sheet = np.array(Image.open(cfg["sheet"]).convert("RGBA"))
     sheet[sheet[:, :, 3] < 40] = 0
     parts = {}
+    for name, fpath in cfg.get("files", {}).items():
+        parts[name] = np.array(Image.open(fpath).convert("RGBA"))
     for name, box in cfg["boxes"].items():
         x0, y0, x1, y1 = box
         a = sheet[y0:y1, x0:x1].copy()
@@ -254,6 +256,45 @@ def main(path):
         up, fo, elbow = ik(sh_, hand, ag["l1"], ag["l2"], knee_fwd=False)
         return dict(shoulder=sh_, elbow=elbow, up=up, fo=fo)
 
+    # ---------- hair: secondary motion that trails the head's bob
+    HAIR = cfg.get("hair")
+    if HAIR:
+        hh, hw = P["head"].shape[:2]
+        Y, X = np.mgrid[0:hh, 0:hw].astype(float)
+        def sst(t): t = np.clip(t, 0, 1); return t * t * (3 - 2 * t)
+        w_top = sst((HAIR["brow_y"] - Y) / HAIR["top_band"])
+        w_back = sst((HAIR["back_x"] - X) / HAIR["back_band"]) * sst((HAIR["back_bottom"] - Y) / 30.0)
+        prot = np.zeros_like(X)
+        for cx_, cy_, rx_, ry_ in HAIR["protect"]:          # face, ear: never bend
+            d = ((X - cx_) / rx_) ** 2 + ((Y - cy_) / ry_) ** 2
+            prot = np.maximum(prot, sst((1.6 - d) / 0.6))
+        HW_Y = np.maximum(w_top, w_back) * (1 - prot)
+        HW_X = w_back * (1 - prot)
+        import cv2
+        def hair_warp(img, dy, dx):
+            mapx = (X - HW_X * dx).astype(np.float32); mapy = (Y - HW_Y * dy).astype(np.float32)
+            src = img.astype(np.float32) / 255.0; src[:, :, :3] *= src[:, :, 3:4]
+            out = cv2.remap(src, mapx, mapy, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+            a = out[:, :, 3:4]; out[:, :, :3] = np.where(a > 1e-4, out[:, :, :3] / np.maximum(a, 1e-4), 0)
+            return (np.clip(out, 0, 1) * 255).astype(np.uint8)
+        # Hair = a damped spring hanging off the head: it lags when the head drops at each
+        # footfall, overshoots a little, then settles. Simulated over a few cycles so the
+        # result loops seamlessly.
+        fn = HAIR.get("freq", 4.0); zeta = HAIR.get("damping", 0.45)
+        w0 = 2 * math.pi * fn; dt = 1.0 / 2000
+        y = bob_c(0.0); v = 0.0; samples = []
+        for step in range(2000 * 6):
+            t = step * dt
+            head = bob_c(t)
+            acc = w0 * w0 * (head - y) - 2 * zeta * w0 * v
+            v += acc * dt; y += v * dt
+            if step >= 2000 * 5:
+                samples.append(y - head)
+        samples = np.array(samples) * HAIR.get("gain", 1.0)
+        hair_curve = periodic_curve(samples[::20])
+        def hair_offset(p):
+            dy = max(-HAIR["max_px"], min(HAIR["max_px"], hair_curve(p)))
+            return dy, -HAIR.get("drag", 0.35) * abs(dy) - HAIR.get("trail_px", 2.0)
     # ---------- rendering
     PAD = 300
     OW = int(TJ["canvas"][0]) + 2 * PAD; OH = int(TJ["canvas"][1]) + 2 * PAD
@@ -282,20 +323,51 @@ def main(path):
             fore = A["fore"] if side == "near" else dark(A["fore"], fd)
             upper = A["upper"] if side == "near" else dark(A["upper"], fd)
             put(c, fore, A["f_elbow"], ap["elbow"], ap["fo"] - ag["fo_nat"])
-            put(c, upper, A["shoulder"], ap["shoulder"], ap["up"] - ag["up_nat"])
+            if not (side == "far" and cfg.get("hide_far_upper_arm")):
+                put(c, upper, A["shoulder"], ap["shoulder"], ap["up"] - ag["up_nat"])
 
         def leg(side):
             lp, lg = info["leg_" + side], LG[side]
             th_img = P["thigh_" + side] if side == "near" else dark(P["thigh_" + side], fd)
             bt_img = P["boot_" + side] if side == "near" else dark(P["boot_" + side], fd)
-            put(c, th_img, J["thigh_" + side]["hip"], lp["hip"], lp["th"] - lg["th_nat"])
-            put(c, bt_img, J["boot_" + side]["knee"], lp["knee"], lp["sh"] - lg["sh_nat"])
+            if cfg.get("thigh_over_shin"):
+                put(c, bt_img, J["boot_" + side]["knee"], lp["knee"], lp["sh"] - lg["sh_nat"])
+                put(c, th_img, J["thigh_" + side]["hip"], lp["hip"], lp["th"] - lg["th_nat"])
+            else:
+                put(c, th_img, J["thigh_" + side]["hip"], lp["hip"], lp["th"] - lg["th_nat"])
+                put(c, bt_img, J["boot_" + side]["knee"], lp["knee"], lp["sh"] - lg["sh_nat"])
 
-        arm("far")
+        if cfg.get("clip_far_arm_behind_back"):
+            # The far arm hangs on the far side of the body: above the waist it is hidden
+            # behind the torso, so nothing of it may stick out past the torso's back edge.
+            layer = Image.new("RGBA", (OW, OH), (0, 0, 0, 0)); keep_c = c; c = layer
+            arm("far")
+            c = keep_c
+            la = np.array(layer)
+            ta = np.array(P["torso"])[:, :, 3] > 0
+            waist = cfg["clip_far_arm_behind_back"]
+            oy = int(round(PAD + bob)); ox = PAD
+            for yy in range(0, int(waist)):
+                xs = np.nonzero(ta[yy])[0]
+                if len(xs) == 0:
+                    continue
+                Y = yy + oy
+                if 0 <= Y < OH:
+                    la[Y, : ox + xs.min() + 2] = 0
+            c.alpha_composite(Image.fromarray(la))
+        else:
+            arm("far")
         leg("far")
         leg("near")
-        put(c, P["torso"], np.array([0.0, 0.0]), np.array([0.0, bob]), 0.0)
-        put(c, P["head"], HJ["neck"], torso_pt("neck", bob), 0.0)
+        if cfg.get("head_under_collar"):
+            pass
+        put(c, P["torso"], np.array([0.0, 0.0]), np.array([0.0, bob]), 0.0) if not cfg.get("head_under_collar") else None
+        head_img = P["head"]
+        if HAIR and not stand:
+            dy, dx = hair_offset(p); head_img = hair_warp(P["head"], dy, dx); info["hair"] = (dy, dx)
+        put(c, head_img, HJ["neck"], torso_pt("neck", bob), 0.0)
+        if cfg.get("head_under_collar"):
+            put(c, P["torso"], np.array([0.0, 0.0]), np.array([0.0, bob]), 0.0)
         arm("near")
         return c, info
 
@@ -304,6 +376,7 @@ def main(path):
     for i in range(N):
         p = i / N; b = bob_c(p)
         f, inf = draw(p, b); frames.append(f); infos.append(inf); bobs.append(b)
+    print("hair dy,dx per frame", [tuple(round(v, 1) for v in i_.get("hair", (0, 0))) for i_ in infos])
     stand, _ = draw(0.0, 0.0, stand=True)
 
     allf = frames + [stand]

@@ -11,3 +11,9 @@ tools/arthur_side_idle.png
 tools/*_cutout_walk_src.*
 tools/*_cutout_stand_src.png
 tools/arthur_v2_side_*.png
+tools/cutout/*_alpha.png
+tools/cutout/torso_built.png
+tools/cutout/thigh_side.png
+tools/cutout/lower_*.png
+tools/cutout/leg_joints.json
+tools/cutout/arthur_cut_*

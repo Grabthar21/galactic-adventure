@@ -5,7 +5,7 @@ signal hp_changed(hp: int, max_hp: int)
 signal died
 
 const SPEED := 119.0           # matched to the traced stride (95 cell px per 0.6 s cycle) so the planted foot does not slide
-const SPEED_V2 := 87.0          # new-parts test: matched to its stride (cut-out rig)
+const SPEED_V2 := 119.0         # cut-out test hero: matched to its stride (tools/cutout)
 const SIDE_WALK_FPS := 20.0
 var walk_speed := SPEED
 const ROLL_DIST := 105.0      # about one character height at gameplay scale
