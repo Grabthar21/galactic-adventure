@@ -1,0 +1,134 @@
+{
+ "name": "arthur",
+ "src": "source_art/side0.png",
+ "joints": {
+  "head": [
+   112,
+   60
+  ],
+  "far_hip": [
+   90,
+   170
+  ],
+  "far_knee": [
+   68,
+   211
+  ],
+  "far_ankle": [
+   58,
+   249
+  ],
+  "near_hip": [
+   110,
+   170
+  ],
+  "near_knee": [
+   124,
+   229
+  ],
+  "near_ankle": [
+   138,
+   256
+  ],
+  "far_shoulder": [
+   119,
+   110
+  ],
+  "far_elbow": [
+   128,
+   147
+  ],
+  "far_wrist": [
+   137,
+   166
+  ],
+  "near_shoulder": [
+   76,
+   106
+  ],
+  "near_elbow": [
+   67,
+   145
+  ],
+  "near_wrist": [
+   60,
+   168
+  ]
+ },
+ "crotch_x": 99,
+ "crotch_y": 199,
+ "leg_top": 166,
+ "band_x": [
+  76,
+  130
+ ],
+ "far_arm_poly": [
+  [
+   118,
+   146
+  ],
+  [
+   180,
+   146
+  ],
+  [
+   180,
+   200
+  ],
+  [
+   126,
+   200
+  ],
+  [
+   121,
+   162
+  ]
+ ],
+ "near_arm_poly": [
+  [
+   30,
+   96
+  ],
+  [
+   80,
+   96
+  ],
+  [
+   80,
+   150
+  ],
+  [
+   76,
+   160
+  ],
+  [
+   74,
+   200
+  ],
+  [
+   30,
+   200
+  ]
+ ],
+ "torso_poly": [
+  [
+   80,
+   96
+  ],
+  [
+   126,
+   96
+  ],
+  [
+   126,
+   160
+  ],
+  [
+   80,
+   160
+  ]
+ ],
+ "_note": "In this pose the LEFT (rear) arm is the near arm: it overlaps the vest. The right arm is the far arm, partly hidden behind the torso.",
+ "far_upper_fixed": true,
+ "_note2": "The far upper arm stays on the torso (it is mostly hidden); only the far forearm and glove swing, from the elbow."
+}

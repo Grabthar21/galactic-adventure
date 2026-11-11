@@ -1,3 +1,6 @@
 .godot/
 build/
 *.import
+tools/*_src.png
+tools/*_src.json
+tools/*_parts_debug.png

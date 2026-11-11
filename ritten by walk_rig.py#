@@ -1,0 +1,1 @@
+meta = json.load(open('arthur_side_walk_src.json'))  

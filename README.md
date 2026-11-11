@@ -20,10 +20,27 @@ actions in Project Settings > Input Map, yours take priority.
 
 ## What's real art and what's placeholder
 - **Real:** Arthur and Gwen walk and idle sprites (from the Drive sheets, re-sliced into a
-  uniform 98x148 grid with feet aligned; see `tools/slice_character_sheet.py`).
+  uniform 98x148 grid with feet aligned; see `tools/slice_character_sheet.py`). Arthur's side
+  walk is rigged from his side pose (see below). Gwen's side walk still uses the sheet as-is.
 - **Placeholder, drawn in code:** everything else (farm, house, wolves, parents, the Stranger,
   Hen-a-wen, the crash) and the weapon swing and roll effects. There's no attack or roll art yet.
 - **No side/back idle art:** side and back idles hold one walk frame.
+
+## Arthur's side walk (rigged)
+The original sheet's four side-walk frames all show the same pose, so Arthur's side walk
+is built by `tools/walk_rig.py`. It cuts his one good side pose into body, thighs, boots
+(shin and foot), upper arms and forearms, then poses them with exact joint angles for each of
+8 frames (contact, down, passing, up, twice). The angles are in the `KEYFRAMES` table at the
+top of `walk_rig.py`; joint positions are in `tools/arthur_rig.json`. `tools/arthur_walk_spec.md`
+lists every angle plus the resulting body drop, stride and foot lift per frame.
+
+Rebuild after changing the table (run inside `tools/`):
+```
+python3 walk_rig.py arthur_rig.json
+python3 build_side_strip.py
+cp arthur_side_walk.png ../art/
+```
+Needs Python 3 with Pillow, numpy, scipy and opencv-python.
 
 ## Files
 - `scripts/main.gd`: story director (the whole opening, scene by scene)
