@@ -11,6 +11,7 @@ usage: python3 build_idle_strip.py <sheet.png> <out.png> [target_height=133]
 import sys
 import numpy as np
 from PIL import Image
+from resample import downscale, defringe, snap_feet, fill_pinholes
 
 SRC_CELL = 256
 CELL_W, CELL_H = 98, 148
@@ -44,7 +45,7 @@ def main():
         w2 = max(1, round(part.width * s))
         h2 = max(1, round(part.height * s))
         # resample at 2x then halve for clean edges
-        part = part.resize((w2 * 2, h2 * 2), Image.LANCZOS).resize((w2, h2), Image.LANCZOS)
+        part = downscale(part, w2, h2)
         # horizontal anchor: feet span centre, so the planted feet never slide
         a = np.array(f)[:, :, 3]
         fy = np.where(a[y1 - 8:y1 + 1] > 40)[1]
@@ -52,6 +53,7 @@ def main():
         px = round(i * CELL_W + CENTER_X - feet_cx)
         py = FOOT_Y + 1 - h2
         strip.alpha_composite(part, (px, py))
+    strip = snap_feet(fill_pinholes(defringe(strip)))
     strip.save(out_path)
     print(f"{n} frames, median src height {ref_h:.0f}px, scale {base_scale:.3f} -> {out_path}")
 
