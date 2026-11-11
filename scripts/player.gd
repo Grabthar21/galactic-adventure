@@ -7,6 +7,9 @@ signal died
 const SPEED := 119.0           # matched to the traced stride (95 cell px per 0.6 s cycle) so the planted foot does not slide
 const SPEED_V2 := 119.0         # cut-out test hero: matched to its stride (tools/cutout)
 const SIDE_WALK_FPS := 20.0
+# Arthur's Sprixen premium walk: 29-frame loop; at 36 fps one cycle (2 steps) takes 0.8 s,
+# which covers ~95 px of ground, so the feet keep pace with SPEED.
+const SIDE_WALK_FPS_BY_HERO := {"arthur": 36.0}
 const IDLE_SIDE_FPS := 12.0     # 16-frame breath loop = ~1.3 s per breath
 var walk_speed := SPEED
 const ROLL_DIST := 105.0      # about one character height at gameplay scale
@@ -79,7 +82,7 @@ func setup(hero: String) -> void:
 		var cells := []
 		for c in count:
 			cells.append([0, c])
-		_add_anim(frames, side_tex, "walk_side", cells, SIDE_WALK_FPS)
+		_add_anim(frames, side_tex, "walk_side", cells, SIDE_WALK_FPS_BY_HERO.get(hero, SIDE_WALK_FPS))
 		var idle_path := "res://art/%s_side_idle.png" % hero
 		if ResourceLoader.exists(idle_path):
 			# Breathing idle loop (tools/sprixen/build_idle_strip.py); a single-cell file still works
