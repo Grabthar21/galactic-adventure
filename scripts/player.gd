@@ -4,7 +4,7 @@ extends CharacterBody2D
 signal hp_changed(hp: int, max_hp: int)
 signal died
 
-const SPEED := 116.0           # matched to the side-walk stride so the planted foot doesn't slide
+const SPEED := 119.0           # matched to the traced stride (95 cell px per 0.6 s cycle) so the planted foot does not slide
 const SIDE_WALK_FPS := 20.0
 const ROLL_DIST := 105.0      # about one character height at gameplay scale
 const ROLL_TIME := 0.32

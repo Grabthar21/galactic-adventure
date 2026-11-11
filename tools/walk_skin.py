@@ -27,23 +27,47 @@ from scipy import ndimage
 # ------------------------------------------------------------------ motion settings
 MOTION = dict(
     frames=12,           # frames per full cycle (two steps)
-    stride=104.0,        # ankle travel during one stance, in source px (about 1.15x leg length)
+    stride=110.0,        # full fore-aft range of the ankle, source px
     duty=0.56,           # fraction of the cycle a foot is on the ground
-    lift=20.0,           # how high the swinging ankle rises (source px)
-    stance_fwd=6.0,      # the stance is centred this far in front of the hip
+    lift=30.0,           # peak lift of the swinging ankle at passing (source px)
+    arm_reach=1.0,       # fist distance scale (reference fist path scaled to Arthur arm)
+    arm_fwd_scale=1.0,
+    far_back_scale=0.5,
+    reach_back=0.97,     # trailing arm almost straight
+    reach_fwd=0.74,      # leading arm: elbow bent about 80 deg, fist up at the chest
+    stance_fwd=4.0,      # shifts the whole foot path forward of the hip
     heel_strike=12.0,    # sole tilt at contact (deg, + = toe up)
     toe_off=-30.0,       # sole tilt as the foot leaves the ground
-    bob=6.5,             # hip bob amplitude (source px); total travel = 2x
+    bob=5.5,             # hip bob amplitude (source px); total travel = 2x
     bob_phase=0.06,      # highest point comes a little after passing
     arm_swing=24.0,      # near upper-arm swing (deg each way)
     elbow_base=16.0,     # elbow bend at rest (deg)
     elbow_swing=14.0,    # extra elbow bend when the arm swings forward
     far_fore_swing=20.0, # far forearm swing about the elbow (deg each way)
     arm_lag=0.04,        # arms trail the legs slightly
-    far_dark=0.86,       # far limbs a touch darker
-    ankle_min=-24.0,     # how far the foot may point down relative to the shin (deg)
-    ankle_max=16.0,      # how far it may flex up
+    far_dark=0.8,        # far limbs darker so they read as behind
+    ankle_min=-50.0,     # how far the foot may point down relative to the shin (deg)
+    ankle_max=55.0,      # how far it may flex up
 )
+
+
+from scipy.interpolate import CubicSpline
+
+
+def periodic_curve(values, harmonics=None):
+    """Smooth periodic curve through evenly spaced samples (one full cycle).
+    harmonics=None: periodic cubic spline through every sample (keeps sharp, purposeful
+    timing such as a steady stance push). harmonics=k: low-pass Fourier fit (removes the
+    1-px reading noise from tiny pixel art)."""
+    v = np.asarray(values, float)
+    n = len(v)
+    if harmonics is not None:
+        c = np.fft.rfft(v)
+        c[harmonics + 1:] = 0
+        v = np.fft.irfft(c, n)
+    t = np.arange(n + 1) / n
+    cs = CubicSpline(t, np.append(v, v[0]), bc_type="periodic")
+    return lambda p: float(cs(p % 1.0))
 
 
 def ddir(a):
@@ -146,7 +170,7 @@ def main(cfg_path):
     # Fill what the near arm covered (the vest edge under the sleeve and the back of the
     # torso) by extending the nearest body colours, so nothing looks sliced or hollow when
     # the arm swings away.
-    fill_region = near_arm & poly(cfg["torso_poly"])
+    fill_region = (near_arm | far_arm) & poly(cfg["torso_poly"])
     if "torso_back_fill" in cfg:
         fill_region |= poly(cfg["torso_back_fill"]) & ~body
     if fill_region.any():
@@ -184,6 +208,7 @@ def main(cfg_path):
         "fore": (J["near_elbow"], J["near_hand"]),
     }
     bones["far_arm"] = {
+        "torso": (J["far_shoulder"] + np.array([-4.0, -16.0]), J["far_shoulder"] + np.array([-3.0, -6.0])),
         "upper": (J["far_shoulder"], J["far_elbow"]),
         "fore": (J["far_elbow"], J["far_hand"]),
     }
@@ -256,29 +281,36 @@ def main(cfg_path):
     # ------------------------------------------------ motion
     N, S, duty = int(M["frames"]), M["stride"], M["duty"]
 
+    REF = json.load(open(cfg["reference"])) if "reference" in cfg else None
+    if REF:
+        fx = np.array(REF["near_foot_x_rel_hip"], float)
+        fl = np.array(REF["near_foot_lift"], float)
+        foot_x_c = periodic_curve(fx)
+        foot_l_c = periodic_curve(fl)
+        sole_c = periodic_curve(cfg.get("sole_keys", [10, 2, 0, 0, -10, -28, -24, -8, 3, 9]))
+        # arms: average near arm with the far arm half a cycle later (they mirror each other)
+        nx_ = np.array(REF["near_fist_x_rel_shoulder"], float); ny_ = np.array(REF["near_fist_y_below_shoulder"], float)
+        fx_ = np.roll(np.array(REF["far_fist_x_rel_shoulder"], float), -5); fy_ = np.roll(np.array(REF["far_fist_y_below_shoulder"], float), -5)
+        # the near (lit) fist is the clearest in the reference; the far arm mirrors it
+        arm_x_c = periodic_curve(nx_, harmonics=2)
+        arm_y_c = periodic_curve(ny_, harmonics=2)
+        top = np.array(REF["head_top_y"], float)
+        down = top - top.min()
+        half = (down[:5] + down[5:]) / 2              # same bob for both steps
+        bob_c = periodic_curve(np.concatenate([half, half]), harmonics=4)
+        ref_leg = cfg.get("ref_leg_len", 9.0)
+        ref_arm = cfg.get("ref_arm_len", 8.0)
+        sx = M["stride"] / (fx.max() - fx.min())     # source px per reference px (horizontal)
+        sl = M["lift"] / max(fl.max(), 1e-6)
+        ref_bob_max = max(half.max(), 1e-6)
+
     def ankle_target(s, p, sole_override=None):
-        """Ankle position and sole tilt for leg s at phase p (0 = this foot's heel strike)."""
+        """Ankle position, sole tilt and lift for leg s at phase p (0 = this foot's heel strike)."""
         p %= 1.0
         hip = J[s + "_hip"]
-        cx_ = hip[0] + M["stance_fwd"]
-        if p < duty:
-            t = p / duty
-            x = cx_ + S / 2 - S * t
-            if t < 0.15:
-                sole = M["heel_strike"] * (1 - smooth(t / 0.15))
-            elif t > 0.72:
-                sole = M["toe_off"] * smooth((t - 0.72) / 0.28)
-            else:
-                sole = 0.0
-            lift = 0.0
-        else:
-            u = (p - duty) / (1 - duty)
-            x = cx_ - S / 2 + S * smooth(u)
-            lift = M["lift"] * math.sin(math.pi * u) ** 1.2
-            sole = M["toe_off"] + (M["heel_strike"] - M["toe_off"]) * smooth(u)
-        if sole_override is not None:
-            sole = sole_override
-        # put the lowest point of the tilted foot on the ground
+        x = hip[0] + M["stance_fwd"] + foot_x_c(p) * sx
+        lift = max(foot_l_c(p), 0.0) * sl
+        sole = sole_c(p) if sole_override is None else sole_override
         d_sole = sole - drawn_sole[s]
         hv = rot(heel_v[s][None], d_sole)[0]
         tv = rot(toe_v[s][None], d_sole)[0]
@@ -292,8 +324,8 @@ def main(cfg_path):
     drawn_sole = {s: sole_of(s) for s in ("far", "near")}
 
     def bob_at(p):
-        # low at each contact (p = 0, 0.5), high a little after each passing
-        return M["bob"] * math.cos(4 * math.pi * (p - M["bob_phase"]))
+        # + = lower. Reference: lowest at contact, rising through passing, high until next contact
+        return (bob_c(p) / ref_bob_max - 0.5) * 2 * M["bob"]
 
     def ik(hip, target, l1, l2):
         d_vec = target - hip
@@ -336,25 +368,39 @@ def main(cfg_path):
             tr["shin"] = (sh - nat[s + "_shin"], J[s + "_knee"], knee)
             tr["foot"] = (sole - drawn_sole[s], J[s + "_ankle"], ankle)
             return tr, dict(hip=hip, knee=knee, ankle=ankle, thigh=th, shin=sh, sole=sole, lift=lift)
-        lag = M["arm_lag"]
-        if layer_name == "near_arm":
-            sw = -M["arm_swing"] * math.cos(2 * math.pi * (p - lag))
-            up = nat["near_upper"] + sw
-            fwd = sw / M["arm_swing"] if M["arm_swing"] else 0.0
-            el = M["elbow_base"] + M["elbow_swing"] * (fwd + 1) / 2   # more bend as the arm comes forward
-            fo = up + el
-            sh_ = J["near_shoulder"] + down
-            elbow = sh_ + ddir(up) * np.linalg.norm(J["near_elbow"] - J["near_shoulder"])
-            tr["torso"] = (0.0, J["near_shoulder"], sh_)
-            tr["upper"] = (up - nat["near_upper"], J["near_shoulder"], sh_)
-            tr["fore"] = (fo - nat["near_fore"], J["near_elbow"], elbow)
-            return tr, dict(upper=up, fore=fo)
-        # far arm: upper arm stays on the torso, forearm swings opposite the near arm
-        sw = M["far_fore_swing"] * math.cos(2 * math.pi * (p - lag))
-        el_src = J["far_elbow"] + down
-        tr["upper"] = (0.0, J["far_shoulder"], J["far_shoulder"] + down)
-        tr["fore"] = (sw, J["far_elbow"], el_src)
-        return tr, dict(fore=nat["far_fore"] + sw)
+        side = "near" if layer_name == "near_arm" else "far"
+        ph = p if side == "near" else p + 0.5
+        sh_ = J[side + "_shoulder"] + down
+        l1 = np.linalg.norm(J[side + "_elbow"] - J[side + "_shoulder"])
+        l2 = np.linalg.norm(J[side + "_hand"] - J[side + "_elbow"])
+        k_arm = (l1 + l2) / ref_arm * M["arm_reach"]
+        ax = arm_x_c(ph) * k_arm * M["arm_fwd_scale"]
+        if side == "far" and ax < 0:
+            # 3/4 view: the far shoulder is drawn in front of the chest, so its backswing
+            # mostly disappears behind the torso; keep the fist from poking out the back
+            ax *= M["far_back_scale"]
+        # Direction of the fist comes from the reference; distance follows how real arms
+        # swing: nearly straight when trailing, elbow bent ~80 deg when leading.
+        dvec = np.array([ax, arm_y_c(ph) * k_arm])
+        fwdness = max(-1.0, min(1.0, dvec[0] / (0.6 * (l1 + l2))))
+        reach = M["reach_back"] + (M["reach_fwd"] - M["reach_back"]) * (fwdness + 1) / 2
+        hand = sh_ + dvec / max(np.linalg.norm(dvec), 1e-6) * (l1 + l2) * reach
+        up, fo, elbow = arm_ik(sh_, hand, l1, l2)
+        tr["torso"] = (0.0, J[side + "_shoulder"], sh_)
+        tr["upper"] = (up - nat[side + "_upper"], J[side + "_shoulder"], sh_)
+        tr["fore"] = (fo - nat[side + "_fore"], J[side + "_elbow"], elbow)
+        return tr, dict(upper=up, fore=fo, hand=hand - sh_)
+
+    def arm_ik(sh_, hand, l1, l2):
+        d_vec = hand - sh_
+        d = min(np.linalg.norm(d_vec), (l1 + l2) * 0.999)
+        base = math.degrees(math.atan2(d_vec[0], d_vec[1]))
+        cosA = (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d)
+        a_ = math.degrees(math.acos(max(-1.0, min(1.0, cosA))))
+        up = base - a_                      # elbow bends backward, forearm comes forward
+        elbow = sh_ + ddir(up) * l1
+        fo = ang(elbow, hand)
+        return up, fo, elbow
 
     def deform(layer_name, p, bob):
         Ly = layers[layer_name]
@@ -424,10 +470,30 @@ def main(cfg_path):
         img.alpha_composite(Image.fromarray(body_rgba), (PAD, PAD))
         return img.transform(img.size, Image.AFFINE, (1, 0, 0, 0, 1, -bob), resample=Image.BICUBIC)
 
+    # Hip height: the reference bob curve, but never so high that a planted leg would have
+    # to over-stretch (that made the planted foot float). Then smoothed so it stays even.
+    def min_down(p):
+        need = -1e9
+        for s_, ph in (("near", p), ("far", p + 0.5)):
+            tgt, _, lift = ankle_target(s_, ph)
+            if lift > 0.5:
+                continue
+            reach = (L[s_]["thigh"] + L[s_]["shin"]) * 0.975
+            dx = tgt[0] - J[s_ + "_hip"][0]
+            dy = math.sqrt(max(reach * reach - dx * dx, 1.0))
+            need = max(need, (tgt[1] - dy) - J[s_ + "_hip"][1])
+        return need
+    SAMPLES = 120
+    raw = np.array([max(bob_at(k / SAMPLES), min_down(k / SAMPLES)) for k in range(SAMPLES)])
+    for _ in range(4):
+        sm = np.fft.rfft(raw); sm[7:] = 0; raw2 = np.fft.irfft(sm, SAMPLES)
+        raw = np.maximum(raw2, [min_down(k / SAMPLES) for k in range(SAMPLES)])
+    bob_curve = periodic_curve(raw)
+
     frames, infos, bobs = [], [], []
     for i in range(N):
         p = i / N
-        bob = bob_at(p)
+        bob = bob_curve(p)
         c = Image.new("RGBA", (OW, OH), (0, 0, 0, 0))
         fa, farm = deform("far_arm", p, bob)
         fl, finfo = deform("far_leg", p, bob)
@@ -435,6 +501,15 @@ def main(cfg_path):
         na, ainfo = deform("near_arm", p, bob)
         for im in (fa, fl, body_at(bob), nlg, na):
             c.alpha_composite(im)
+        # drop stray specks left by the warp (tiny islands of a few pixels)
+        arr = np.array(c)
+        lab_s, ns_ = ndimage.label(arr[:, :, 3] > 0, structure=np.ones((3, 3)))
+        if ns_ > 1:
+            szs = ndimage.sum(np.ones_like(lab_s), lab_s, range(1, ns_ + 1))
+            for k_, v_ in enumerate(szs):
+                if v_ < 40:
+                    arr[lab_s == k_ + 1] = 0
+            c = Image.fromarray(arr)
         frames.append(c)
         infos.append(dict(far=finfo, near=ninfo, arm=ainfo, farm=farm))
         bobs.append(bob)
@@ -453,7 +528,8 @@ def main(cfg_path):
     strip.save(f"{name}_side_walk_src.png")
     ground_y = max(ground.values()) + PAD - box[1]
     json.dump({"frame_w": fw, "frame_h": fh, "count": N, "head_x": J["head"][0] + PAD - box[0],
-               "ground_y": ground_y, "cycle_travel_src": S / duty},
+               "ground_y": ground_y,
+               "cycle_travel_src": (2 * (foot_x_c(0.0) - foot_x_c(0.5)) * sx) if REF else S / duty},
               open(f"{name}_side_walk_src.json", "w"))
 
     # ---------------- spec
