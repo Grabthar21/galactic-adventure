@@ -3,7 +3,7 @@ extends CharacterBody2D
 
 signal defeated
 
-const SPEED := 150.0
+const SPEED := 120.0   # a little faster than the hero's walk, slower than a dodge
 const LUNGE_SPEED := 620.0
 const LUNGE_TIME := 0.28
 const TELEGRAPH := 0.65

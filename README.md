@@ -26,21 +26,37 @@ actions in Project Settings > Input Map, yours take priority.
   Hen-a-wen, the crash) and the weapon swing and roll effects. There's no attack or roll art yet.
 - **No side/back idle art:** side and back idles hold one walk frame.
 
-## Arthur's side walk (rigged)
-The original sheet's four side-walk frames all show the same pose, so Arthur's side walk
-is built by `tools/walk_rig.py`. It cuts his one good side pose into body, thighs, boots
-(shin and foot), upper arms and forearms, then poses them with exact joint angles for each of
-8 frames (contact, down, passing, up, twice). The angles are in the `KEYFRAMES` table at the
-top of `walk_rig.py`; joint positions are in `tools/arthur_rig.json`. `tools/arthur_walk_spec.md`
-lists every angle plus the resulting body drop, stride and foot lift per frame.
+## Arthur's side walk (skinned rig)
+The original sheet's four side-walk frames all show the same pose, so Arthur's side walk is
+generated from his one good side pose by `tools/walk_skin.py`:
+- **No gaps:** each layer (far arm, far leg, body, near leg, near arm) is warped as one
+  continuous mesh over a skeleton, the way Spine and Live2D bend art, so limbs never come
+  apart at the knees or elbows.
+- **Planned feet:** the feet follow paths. A planted foot slides back at exactly the walking
+  speed; a swinging foot lifts in a smooth arc. 2-bone IK works out the hip and knee angles.
+  Heel strike and toe-off tilt the sole, and the lowest point of the foot always touches the
+  ground.
+- **Smooth bob:** the hips bob on an even curve twice per step (lowest at contact). Arms swing
+  opposite the legs.
+- **No jitter:** every frame is placed in its cell the same way (`tools/build_walk_strip.py`),
+  so the frames are never shifted against each other.
+- **Settings:** stride, lift, bob, arm swing, frame count and the rest are in `MOTION` at the
+  top of `walk_skin.py`. Joint positions are in `tools/arthur_rig.json`.
+  `tools/arthur_walk_spec.md` lists every joint angle per frame.
+- **Walk speed:** the game's walk speed (`SPEED` in `scripts/player.gd`, 116 px/s) matches the
+  stride at 20 fps, so the planted foot doesn't skate. If you change the stride or fps,
+  update it: speed = (cycle travel in cell px x 0.75) / (frames / fps).
 
-Rebuild after changing the table (run inside `tools/`):
+Rebuild (run inside `tools/`):
 ```
-python3 walk_rig.py arthur_rig.json
-python3 build_side_strip.py
-cp arthur_side_walk.png ../art/
+python3 walk_skin.py arthur_rig.json && python3 build_walk_strip.py arthur && cp arthur_side_walk.png ../art/
 ```
+The standing side pose (`art/arthur_side_idle.png`) comes from the same rig with
+stride, bob and swing set to 0 (`arthur_stand_rig.json`).
 Needs Python 3 with Pillow, numpy, scipy and opencv-python.
+
+Motion reference: "male hero" walk by Ozzbit Games (free version, used only to study timing,
+not included in the game).
 
 ## Files
 - `scripts/main.gd`: story director (the whole opening, scene by scene)

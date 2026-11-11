@@ -4,7 +4,8 @@ extends CharacterBody2D
 signal hp_changed(hp: int, max_hp: int)
 signal died
 
-const SPEED := 200.0
+const SPEED := 116.0           # matched to the side-walk stride so the planted foot doesn't slide
+const SIDE_WALK_FPS := 20.0
 const ROLL_DIST := 105.0      # about one character height at gameplay scale
 const ROLL_TIME := 0.32
 const ROLL_COOLDOWN := 0.15
@@ -60,15 +61,23 @@ func setup(hero: String) -> void:
 	_add_anim(frames, tex, "idle_down", [[0, 0], [0, 0], [0, 1], [0, 0], [0, 3], [0, 0], [0, 0], [0, 2]], 4.0)
 	# Front/back walks: the sheet's 4th frame repeats the 3rd pose, so play 0,1,2,1 for a clean L-R-L-R step.
 	var front_back_order := [0, 1, 2, 1] if hero == "arthur" else [0, 1, 2, 3]
-	_add_anim(frames, tex, "walk_down", front_back_order.map(func(c): return [2, c]), 7.0)
-	_add_anim(frames, tex, "walk_up", front_back_order.map(func(c): return [3, c]), 7.0)
+	_add_anim(frames, tex, "walk_down", front_back_order.map(func(c): return [2, c]), 8.0)
+	_add_anim(frames, tex, "walk_up", front_back_order.map(func(c): return [3, c]), 8.0)
 	_add_anim(frames, tex, "idle_up", [[3, 0]], 1.0)
 	var side_path := "res://art/%s_side_walk.png" % hero
 	if ResourceLoader.exists(side_path):
-		# Rigged 8-frame side cycle (contact, down, passing, up, contact, down, passing, up)
+		# Skinned 12-frame side cycle from tools/walk_skin.py (frame 0 = near heel strike)
 		var side_tex: Texture2D = load(side_path)
-		_add_anim(frames, side_tex, "walk_side", [[0, 0], [0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [0, 6], [0, 7]], 14.0)
-		_add_anim(frames, side_tex, "idle_side", [[0, 2]], 1.0)   # passing pose: feet together
+		var count := int(side_tex.get_width() / CELL.x)
+		var cells := []
+		for c in count:
+			cells.append([0, c])
+		_add_anim(frames, side_tex, "walk_side", cells, SIDE_WALK_FPS)
+		var idle_path := "res://art/%s_side_idle.png" % hero
+		if ResourceLoader.exists(idle_path):
+			_add_anim(frames, load(idle_path), "idle_side", [[0, 0]], 1.0)   # standing pose from the same rig
+		else:
+			_add_anim(frames, side_tex, "idle_side", [[0, count / 3]], 1.0)
 	else:
 		_add_anim(frames, tex, "walk_side", [[1, 0], [1, 1], [1, 2], [1, 3]], 8.0)
 		_add_anim(frames, tex, "idle_side", [[1, 0]], 1.0)
@@ -221,6 +230,8 @@ func _update_anim() -> void:
 	var anim := ("walk_" if moving or state == "roll" else "idle_") + anim_dir
 	if sprite.animation != anim:
 		sprite.play(anim)
+	# legs keep pace with actual speed (e.g. a half-pushed stick walks slower, not skating)
+	sprite.speed_scale = clampf(velocity.length() / SPEED, 0.5, 1.5) if moving else 1.0
 
 
 func _draw_fx() -> void:

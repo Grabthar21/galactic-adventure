@@ -4,3 +4,7 @@ build/
 tools/*_src.png
 tools/*_src.json
 tools/*_parts_debug.png
+tools/arthur_side_walk.png
+tools/*_side_walk.json
+tools/arthur_stand_side_walk_src.*
+tools/arthur_side_idle.png

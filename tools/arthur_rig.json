@@ -38,29 +38,29 @@
    128,
    147
   ],
-  "far_wrist": [
-   137,
-   166
-  ],
   "near_shoulder": [
-   76,
-   106
+   79,
+   102
   ],
   "near_elbow": [
    67,
    145
   ],
-  "near_wrist": [
-   60,
-   168
+  "near_hand": [
+   54,
+   188
+  ],
+  "far_hand": [
+   146,
+   182
   ]
  },
  "crotch_x": 99,
  "crotch_y": 199,
  "leg_top": 166,
  "band_x": [
-  76,
-  130
+  40,
+  132
  ],
  "far_arm_poly": [
   [
@@ -129,6 +129,31 @@
   ]
  ],
  "_note": "In this pose the LEFT (rear) arm is the near arm: it overlaps the vest. The right arm is the far arm, partly hidden behind the torso.",
- "far_upper_fixed": true,
- "_note2": "The far upper arm stays on the torso (it is mostly hidden); only the far forearm and glove swing, from the elbow."
+ "torso_back_fill": [
+  [
+   81,
+   96
+  ],
+  [
+   74,
+   100
+  ],
+  [
+   69,
+   114
+  ],
+  [
+   68,
+   135
+  ],
+  [
+   71,
+   152
+  ],
+  [
+   81,
+   160
+  ]
+ ],
+ "far_foot_raise": 1.0
 }
