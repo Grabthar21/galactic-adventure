@@ -16,6 +16,9 @@ usage: python3 lock_head.py <sheet.png> <base_sprite.png> <out_sheet.png> [cycle
 import sys
 import numpy as np
 from PIL import Image
+from scipy import ndimage
+
+ALPHA_CUT = 60    # Sprixen leaves the far arm partly see-through: anything above this counts as solid
 
 SRC = 256
 # rows of the approved base sprite (arthur_v1_base.png)
@@ -126,6 +129,36 @@ def main():
         rgb = (src[:, :, :3] * sa + dst[:, :, :3] * da * (1 - sa)) / np.maximum(oa, 1e-6)
         f[ya:yb, xa:xb, :3] = rgb
         f[ya:yb, xa:xb, 3:4] = oa * 255
+        # clean the matte: haze (e.g. pale film between arm and body) -> clear, near-solid -> solid
+        solid = f[:, :, 3] >= ALPHA_CUT
+        f[:, :, 3] = np.where(solid, 255, 0)
+        # pale haze left by background removal (e.g. between the arm and body) is a cool,
+        # bluish/greenish white; Arthur's shirt and skin are warm (red highest), so cool light pixels go
+        rgb_ = f[:, :, :3]
+        haze = solid & (rgb_.min(2) > 140) & (rgb_[:, :, 0] < np.maximum(rgb_[:, :, 1], rgb_[:, :, 2]) - 2)
+        solid &= ~haze
+        f[:, :, 3] = np.where(solid, 255, 0)
+        # holes just under the chin (see-through collar) -> fill from the approved sprite's collar
+        holes, nh = ndimage.label(ndimage.binary_fill_holes(solid) & ~solid)
+        bx, by = x0 - hx0, y0 - HEAD_TOP          # frame = base shifted by (bx, by)
+        chin = y0 + hh
+        for lab in range(1, nh + 1):
+            ys, xs = np.where(holes == lab)
+            if not (chin - 20 <= ys.mean() <= chin + 30) or len(ys) > 600:
+                continue                           # only the collar; real gaps elsewhere stay open
+            sy, sx = ys - by, xs - bx
+            ok = (sy >= 0) & (sy < SRC) & (sx >= 0) & (sx < SRC)
+            src_px = np.zeros((len(ys), 4), np.float32)
+            src_px[ok] = base[sy[ok], sx[ok]]
+            use = src_px[:, 3] > 128
+            f[ys[use], xs[use], :3] = src_px[use, :3]
+            f[ys[use], xs[use], 3] = 255
+            # anything the base doesn't cover: nearest solid neighbour colour
+            rest = ~use
+            if rest.any():
+                _, (iy, ix) = ndimage.distance_transform_edt(f[:, :, 3] < 255, return_indices=True)
+                f[ys[rest], xs[rest], :3] = f[iy[ys[rest], xs[rest]], ix[ys[rest], xs[rest]], :3]
+                f[ys[rest], xs[rest], 3] = 255
         out.paste(Image.fromarray(np.clip(f, 0, 255).astype(np.uint8)), (i * SRC, 0))
     out.save(out_path)
     print("head y raw", pos[:, 1].astype(int).tolist())
