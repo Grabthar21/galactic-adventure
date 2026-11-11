@@ -28,6 +28,7 @@ var _choice_sel := 0
 var _hero_sel := 0
 var name_edit: LineEdit
 var hero_preview: Array = []
+var hero_test_btn: Button
 
 
 func _ready() -> void:
@@ -359,6 +360,15 @@ func show_title() -> void:
 	name_edit.add_theme_font_size_override("font_size", 20)
 	name_edit.text_submitted.connect(func(_t): _start())
 	title.add_child(name_edit)
+	var test_btn := Button.new()
+	test_btn.text = "Test: Arthur from new parts sheet"
+	test_btn.focus_mode = Control.FOCUS_NONE
+	test_btn.add_theme_font_size_override("font_size", 16)
+	test_btn.size = Vector2(330, 34)
+	test_btn.position = Vector2(880, 495)
+	test_btn.pressed.connect(func(): _pick_hero(2))
+	title.add_child(test_btn)
+	hero_test_btn = test_btn
 	var go := Button.new()
 	go.text = "Begin"
 	go.focus_mode = Control.FOCUS_NONE
@@ -368,7 +378,7 @@ func show_title() -> void:
 	go.pressed.connect(_start)
 	title.add_child(go)
 	var hint := _label(title, 15, Color(1, 1, 1, 0.6))
-	hint.text = "Left/Right picks a hero. Type a name if you like, then press Enter or click Begin.\nKeyboard or gamepad recommended."
+	hint.text = "Left/Right picks a hero (T = new-parts test). Type a name if you like, then press Enter or click Begin.\nKeyboard or gamepad recommended."
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.size = Vector2(1280, 50)
 	hint.position = Vector2(0, 630)
@@ -377,13 +387,16 @@ func show_title() -> void:
 
 
 func _pick_hero(i: int) -> void:
-	var old_default := "Arthur" if _hero_sel == 0 else "Gwen"
+	var old_default := "Gwen" if _hero_sel == 1 else "Arthur"
 	_hero_sel = i
 	if name_edit.text == "" or name_edit.text == old_default:
-		name_edit.text = "Arthur" if i == 0 else "Gwen"
+		name_edit.text = "Gwen" if i == 1 else "Arthur"
 	for j in hero_preview.size():
-		hero_preview[j][0].modulate = Color.WHITE if j == i else Color(0.45, 0.45, 0.5)
+		var on := j == i or (i == 2 and j == 0)
+		hero_preview[j][0].modulate = Color.WHITE if on else Color(0.45, 0.45, 0.5)
 		hero_preview[j][1].modulate = Color(1, 0.85, 0.4) if j == i else Color(0.7, 0.7, 0.7)
+	if hero_test_btn:
+		hero_test_btn.modulate = Color(1, 0.85, 0.4) if i == 2 else Color(0.7, 0.7, 0.7)
 
 
 func _title_input(event: InputEvent) -> void:
@@ -392,6 +405,8 @@ func _title_input(event: InputEvent) -> void:
 			_pick_hero(0)
 		elif event.physical_keycode == KEY_RIGHT:
 			_pick_hero(1)
+		elif event.physical_keycode == KEY_T and not name_edit.has_focus():
+			_pick_hero(2)
 		elif event.physical_keycode in [KEY_ENTER, KEY_KP_ENTER] and not name_edit.has_focus():
 			_start()
 	elif event is InputEventJoypadButton and event.pressed:
@@ -406,9 +421,9 @@ func _title_input(event: InputEvent) -> void:
 func _start() -> void:
 	if not title.visible:
 		return
-	GameState.hero = "arthur" if _hero_sel == 0 else "gwen"
+	GameState.hero = ["arthur", "gwen", "arthur_v2"][_hero_sel]
 	var n := name_edit.text.strip_edges()
-	GameState.hero_name = n if n != "" else ("Arthur" if _hero_sel == 0 else "Gwen")
+	GameState.hero_name = n if n != "" else ("Gwen" if _hero_sel == 1 else "Arthur")
 	title.visible = false
 	title.queue_free()
 	title_started.emit()

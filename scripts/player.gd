@@ -5,7 +5,9 @@ signal hp_changed(hp: int, max_hp: int)
 signal died
 
 const SPEED := 119.0           # matched to the traced stride (95 cell px per 0.6 s cycle) so the planted foot does not slide
+const SPEED_V2 := 87.0          # new-parts test: matched to its stride (cut-out rig)
 const SIDE_WALK_FPS := 20.0
+var walk_speed := SPEED
 const ROLL_DIST := 105.0      # about one character height at gameplay scale
 const ROLL_TIME := 0.32
 const ROLL_COOLDOWN := 0.15
@@ -54,13 +56,17 @@ func _ready() -> void:
 
 
 func setup(hero: String) -> void:
-	var tex: Texture2D = load("res://art/%s_frames.png" % hero)
+	# "arthur_v2" = test of the new cut-out parts: side views from the parts rig,
+	# front/back still from the approved Arthur sheet
+	var base := "arthur" if hero == "arthur_v2" else hero
+	var tex: Texture2D = load("res://art/%s_frames.png" % base)
+	walk_speed = SPEED_V2 if hero == "arthur_v2" else SPEED
 	var frames := SpriteFrames.new()
 	frames.remove_animation("default")
 	# Sheet rows: 0 idle (front), 1 walk side (faces right), 2 walk down, 3 walk up
 	_add_anim(frames, tex, "idle_down", [[0, 0], [0, 0], [0, 1], [0, 0], [0, 3], [0, 0], [0, 0], [0, 2]], 4.0)
 	# Front/back walks: the sheet's 4th frame repeats the 3rd pose, so play 0,1,2,1 for a clean L-R-L-R step.
-	var front_back_order := [0, 1, 2, 1] if hero == "arthur" else [0, 1, 2, 3]
+	var front_back_order := [0, 1, 2, 1] if base == "arthur" else [0, 1, 2, 3]
 	_add_anim(frames, tex, "walk_down", front_back_order.map(func(c): return [2, c]), 8.0)
 	_add_anim(frames, tex, "walk_up", front_back_order.map(func(c): return [3, c]), 8.0)
 	_add_anim(frames, tex, "idle_up", [[3, 0]], 1.0)
@@ -139,7 +145,7 @@ func _physics_process(delta: float) -> void:
 
 	match state:
 		"move":
-			velocity = input * SPEED
+			velocity = input * walk_speed
 			if input.length() > 0.1:
 				facing = input.normalized()
 			if controllable and weapon != "" and Input.is_action_just_pressed("attack"):
@@ -231,7 +237,7 @@ func _update_anim() -> void:
 	if sprite.animation != anim:
 		sprite.play(anim)
 	# legs keep pace with actual speed (e.g. a half-pushed stick walks slower, not skating)
-	sprite.speed_scale = clampf(velocity.length() / SPEED, 0.5, 1.5) if moving else 1.0
+	sprite.speed_scale = clampf(velocity.length() / walk_speed, 0.5, 1.5) if moving else 1.0
 
 
 func _draw_fx() -> void:
