@@ -31,6 +31,34 @@ def rgba(im):
     return np.array(im).astype(np.float32)
 
 
+def clean_body(f):
+    """Undo Sprixen's background-removal leftovers on the body.
+    - haze: cool (bluish/greenish) light pixels -> cleared
+    - white fringe: pixels within 2px of the outside that are not fully opaque and are much
+      lighter than the nearest fully opaque pixel were blended with the old white backdrop
+      -> cleared; the rest of the soft edge takes the colour of the nearest opaque pixel
+    - everything left above ALPHA_CUT becomes fully opaque (the far arm is partly see-through)
+    """
+    A = f[:, :, 3]
+    rgb = f[:, :, :3]
+    solid = A >= ALPHA_CUT
+    solid &= ~((rgb.min(2) > 140) & (rgb[:, :, 0] < np.maximum(rgb[:, :, 1], rgb[:, :, 2]) - 2))
+    interior = solid & (A >= 245)
+    _, (iy, ix) = ndimage.distance_transform_edt(~interior, return_indices=True)
+    near = rgb[iy, ix]
+    lum = rgb.mean(2)
+    lighter = lum - near.mean(2)
+    outside_d = ndimage.distance_transform_edt(solid)
+    soft = solid & ~interior & (outside_d <= 2.5)   # only the edge band; deeper see-through pixels keep their colour
+    fringe = soft & (outside_d <= 2.5) & (lighter > 30)
+    solid &= ~fringe
+    soft &= ~fringe
+    f = f.copy()
+    f[soft, :3] = near[soft]
+    f[:, :, 3] = np.where(solid, 255, 0)
+    return f
+
+
 def find_head(frame, face, fx0, search=28):
     """Best (dx, dy) placing the base face into the frame."""
     fa = face[:, :, 3:4] / 255.0
@@ -106,6 +134,7 @@ def main():
         # erase the frame's own head: everything above the collar line
         cut = y0 + hh - FEATHER
         f[:max(cut, 0)] = 0
+        f = clean_body(f)
         # hair warp: shift each hair row vertically by hair_dy * weight (1 at top -> 0 at brow)
         h = head.copy()
         brow_r = BROW - HEAD_TOP
@@ -129,14 +158,7 @@ def main():
         rgb = (src[:, :, :3] * sa + dst[:, :, :3] * da * (1 - sa)) / np.maximum(oa, 1e-6)
         f[ya:yb, xa:xb, :3] = rgb
         f[ya:yb, xa:xb, 3:4] = oa * 255
-        # clean the matte: haze (e.g. pale film between arm and body) -> clear, near-solid -> solid
         solid = f[:, :, 3] >= ALPHA_CUT
-        f[:, :, 3] = np.where(solid, 255, 0)
-        # pale haze left by background removal (e.g. between the arm and body) is a cool,
-        # bluish/greenish white; Arthur's shirt and skin are warm (red highest), so cool light pixels go
-        rgb_ = f[:, :, :3]
-        haze = solid & (rgb_.min(2) > 140) & (rgb_[:, :, 0] < np.maximum(rgb_[:, :, 1], rgb_[:, :, 2]) - 2)
-        solid &= ~haze
         f[:, :, 3] = np.where(solid, 255, 0)
         # holes just under the chin (see-through collar) -> fill from the approved sprite's collar
         holes, nh = ndimage.label(ndimage.binary_fill_holes(solid) & ~solid)
