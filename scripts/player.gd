@@ -7,6 +7,7 @@ signal died
 const SPEED := 119.0           # matched to the traced stride (95 cell px per 0.6 s cycle) so the planted foot does not slide
 const SPEED_V2 := 119.0         # cut-out test hero: matched to its stride (tools/cutout)
 const SIDE_WALK_FPS := 20.0
+const IDLE_SIDE_FPS := 12.0     # 16-frame breath loop = ~1.3 s per breath
 var walk_speed := SPEED
 const ROLL_DIST := 105.0      # about one character height at gameplay scale
 const ROLL_TIME := 0.32
@@ -81,7 +82,13 @@ func setup(hero: String) -> void:
 		_add_anim(frames, side_tex, "walk_side", cells, SIDE_WALK_FPS)
 		var idle_path := "res://art/%s_side_idle.png" % hero
 		if ResourceLoader.exists(idle_path):
-			_add_anim(frames, load(idle_path), "idle_side", [[0, 0]], 1.0)   # standing pose from the same rig
+			# Breathing idle loop (tools/sprixen/build_idle_strip.py); a single-cell file still works
+			var idle_tex: Texture2D = load(idle_path)
+			var idle_count := int(idle_tex.get_width() / CELL.x)
+			var idle_cells := []
+			for c in idle_count:
+				idle_cells.append([0, c])
+			_add_anim(frames, idle_tex, "idle_side", idle_cells, IDLE_SIDE_FPS if idle_count > 1 else 1.0)
 		else:
 			_add_anim(frames, side_tex, "idle_side", [[0, count / 3]], 1.0)
 	else:
