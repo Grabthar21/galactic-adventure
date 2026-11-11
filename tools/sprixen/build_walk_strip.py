@@ -14,7 +14,7 @@ usage: python3 build_walk_strip.py <sheet.png> <out.png> [target_height=133] [fp
 import sys
 import numpy as np
 from PIL import Image
-from resample import downscale, defringe, snap_feet, fill_pinholes
+from resample import downscale, defringe, snap_feet, fill_pinholes, remove_specks
 
 SRC = 256
 CELL_W, CELL_H = 98, 148
@@ -45,11 +45,15 @@ def main():
     hs = np.array([d["h"] for d in info], float)
     n = len(frames)
     smooth = np.array([(hs[i - 1] + hs[i] + hs[(i + 1) % n]) / 3 for i in range(n)])
-    base = target_h / float(np.median(hs))
+    # one scale for the whole strip, from the approved standing drawing's height (env BASE_H),
+    # so a striding frame is drawn at exactly the same size as the standing idle
+    import os
+    base_h = float(os.environ.get("BASE_H", np.median(hs)))
+    base = target_h / base_h
     strip = Image.new("RGBA", (CELL_W * n, CELL_H), (0, 0, 0, 0))
     foot_x = []   # x of the lowest (planted) foot, in game cell px, per frame
     for i, (f, d) in enumerate(zip(frames, info)):
-        s = base * smooth[i] / d["h"]
+        s = base
         w2, h2 = round(SRC * s), round(SRC * s)
         big = downscale(f, w2, h2)
         # place: torso centre -> CENTER_X, feet bottom -> FOOT_Y
@@ -68,7 +72,7 @@ def main():
         ys, xs = np.where(a)
         low = xs[ys > d["bot"] - 4]
         foot_x.append((low.min() - d["torso"]) * s)   # toe-side unused; heel edge
-    strip = snap_feet(fill_pinholes(defringe(strip)))
+    strip = snap_feet(remove_specks(fill_pinholes(defringe(strip))))
     strip.save(out)
     # planted-foot slide per frame (backwards = positive speed)
     dx = [foot_x[i] - foot_x[(i + 1) % n] for i in range(n)]

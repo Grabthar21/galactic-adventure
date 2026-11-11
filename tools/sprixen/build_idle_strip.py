@@ -11,7 +11,7 @@ usage: python3 build_idle_strip.py <sheet.png> <out.png> [target_height=133]
 import sys
 import numpy as np
 from PIL import Image
-from resample import downscale, defringe, snap_feet, fill_pinholes
+from resample import downscale, defringe, snap_feet, fill_pinholes, remove_specks
 
 SRC_CELL = 256
 CELL_W, CELL_H = 98, 148
@@ -35,25 +35,26 @@ def main():
     heights = np.array([b[3] - b[1] for b in boxes], float)
     ref_h = float(np.median(heights))
     # one global scale so the median frame is target_h tall
-    base_scale = target_h / ref_h
+    import os
+    base_scale = target_h / float(os.environ.get("BASE_H", ref_h))   # same rule as the walks
     strip = Image.new("RGBA", (CELL_W * n, CELL_H), (0, 0, 0, 0))
     for i, (f, b, h) in enumerate(zip(frames, boxes, heights)):
         want = ref_h + KEEP * (h - ref_h)
-        s = base_scale * want / h
+        s = base_scale if "BASE_H" in os.environ else base_scale * want / h
         x0, y0, x1, y1 = b
         part = f.crop((x0, y0, x1 + 1, y1 + 1))
         w2 = max(1, round(part.width * s))
         h2 = max(1, round(part.height * s))
-        # resample at 2x then halve for clean edges
-        part = downscale(part, w2, h2)
-        # horizontal anchor: feet span centre, so the planted feet never slide
+        part = downscale(part, w2, h2)     # premultiplied area average (tools/sprixen/resample.py)
         a = np.array(f)[:, :, 3]
-        fy = np.where(a[y1 - 8:y1 + 1] > 40)[1]
-        feet_cx = ((fy.min() + fy.max()) / 2.0 - x0) * s
+        # torso centre (same anchor as the walk strips, so stopping never shifts him sideways)
+        t0, t1 = y0 + 75, y0 + 105
+        tx = np.where(a[t0:t1] > 40)[1].mean()
+        feet_cx = (tx - x0) * s
         px = round(i * CELL_W + CENTER_X - feet_cx)
         py = FOOT_Y + 1 - h2
         strip.alpha_composite(part, (px, py))
-    strip = snap_feet(fill_pinholes(defringe(strip)))
+    strip = snap_feet(remove_specks(fill_pinholes(defringe(strip))))
     strip.save(out_path)
     print(f"{n} frames, median src height {ref_h:.0f}px, scale {base_scale:.3f} -> {out_path}")
 

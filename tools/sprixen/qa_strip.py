@@ -75,9 +75,13 @@ def main():
         for k in range(1, nh + 1):
             sz = int((holes == k).sum())
             hy, hx = np.where(holes == k)
-            if sz >= 3 and hy.mean() < top + 0.55 * (bot - top):
-                fails.append(f"frame {i}: see-through hole {sz}px at ({int(hx.mean())},{int(hy.mean())})")
-        lab, nl = ndimage.label(m)
+            if sz <= 12:   # same limit as resample.fill_pinholes; bigger = real arm/leg gap
+                fails.append(f"frame {i}: pinhole {sz}px at ({int(hx.mean())},{int(hy.mean())})")
+            elif hy.mean() < top + 0.45 * (bot - top):
+                fails.append(f"frame {i}: see-through hole {sz}px in head/chest at ({int(hx.mean())},{int(hy.mean())})")
+            else:
+                notes.append(f"frame {i}: {sz}px gap at ({int(hx.mean())},{int(hy.mean())}) - arm/leg gap, ok")
+        lab, nl = ndimage.label(m, structure=np.ones((3, 3)))
         if nl > 1:
             sizes = ndimage.sum(m, lab, range(1, nl + 1))
             main = sizes.max()
@@ -90,8 +94,8 @@ def main():
     H = np.array(heights, float)
     C = np.array(centres)
     med_h = float(np.median(H))
-    if abs(med_h - target) > 3:
-        fails.append(f"median height {med_h:.0f}px vs target {target:.0f}px")
+    # (absolute size is checked across animations by qa_cross.py: a wide stance is
+    #  legitimately shorter than the standing drawing, so height alone isn't a size test)
     if kind == "idle" and H.max() - H.min() > 3:
         fails.append(f"idle height varies {H.min():.0f}-{H.max():.0f}px")
     if kind == "walk" and H.max() - H.min() > 8:

@@ -50,7 +50,12 @@ def snap_feet(img, cell_w=98, foot_y=147):
         if len(rows):
             dy = foot_y - rows.max()
             if dy:
-                a[:, i * cell_w:(i + 1) * cell_w] = np.roll(c, dy, axis=0)
+                shifted = np.zeros_like(c)          # shift without wrapping rows round
+                if dy > 0:
+                    shifted[dy:] = c[:-dy]
+                else:
+                    shifted[:dy] = c[-dy:]
+                a[:, i * cell_w:(i + 1) * cell_w] = shifted
     return Image.fromarray(a)
 
 
@@ -69,3 +74,17 @@ def fill_pinholes(img, max_px=12):
                 a[hm, :3] = a[iy[hm], ix[hm], :3]
                 a[hm, 3] = 255
     return Image.fromarray(a.astype(np.uint8))
+
+
+def remove_specks(img, max_px=10):
+    """Drop tiny islands of pixels not connected to the character."""
+    from scipy import ndimage
+    a = np.array(img.convert("RGBA"))
+    m = a[:, :, 3] > 0
+    lab, n = ndimage.label(m, structure=np.ones((3, 3)))
+    if n > 1:
+        sizes = ndimage.sum(m, lab, range(1, n + 1))
+        for k, s in enumerate(sizes, 1):
+            if s <= max_px:
+                a[lab == k] = 0
+    return Image.fromarray(a)
