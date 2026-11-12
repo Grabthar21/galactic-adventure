@@ -10,6 +10,7 @@ var stranger_attitude := ""   # "willing" or "begrudging"
 # Appearance (title screen). null = the drawing's own colours.
 var skin_color = null          # Color or null
 var hair_color = null          # Color or null
+var hairstyle := ""            # "" = default; else a style built by tools/sprixen (art/<hero>__<style>_*)
 
 # Customization presets. Index 0 = as drawn.
 const SKIN_TONES := [

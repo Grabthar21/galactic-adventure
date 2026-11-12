@@ -2,19 +2,50 @@
   "name": "arthur",
   "game_height": 133,
   "views": {
-    "side":  {"base": "base_side.png"},
-    "front": {"base": "base_front.png"},
-    "back":  {"base": "base_back.png"}
+    "side": {
+      "base": "base_side.png"
+    },
+    "front": {
+      "base": "base_front.png"
+    },
+    "back": {
+      "base": "base_back.png"
+    }
   },
   "walks": {
-    "side": {"raw": "raw/walk_side.png"},
-    "down": {"raw": "raw/walk_down.png"},
-    "up":   {"raw": "raw/walk_up.png"}
+    "side": {
+      "raw": "raw/walk_side.png"
+    },
+    "down": {
+      "raw": "raw/walk_down.png"
+    },
+    "up": {
+      "raw": "raw/walk_up.png"
+    }
   },
   "walk_cycle_seconds": 0.8,
-  "idle": {"frames": 32, "lift_px": 2.4, "fps": 12},
+  "idle": {
+    "frames": 32,
+    "lift_px": 2.4,
+    "fps": 12
+  },
   "fix_gloves": true,
   "skin_reference": "side",
-  "extra_idles": [{"out": "arthur_v2_side_idle.png", "view": "side", "height": 123}],
-  "notes": "Version 1 (3/4 right) is the approved look. Walks are Sprixen premium. Idles are generated from the base drawings by breathe.py."
+  "extra_idles": [
+    {
+      "out": "arthur_v2_side_idle.png",
+      "view": "side",
+      "height": 123
+    }
+  ],
+  "notes": "Version 1 (3/4 right) is the approved look. Walks are Sprixen premium. Idles are generated from the base drawings by breathe.py.",
+  "default_style_label": "Tousled",
+  "hairstyles": {
+    "crop": {
+      "label": "Short crop",
+      "side": "styles/crop_side.png",
+      "front": "styles/crop_front.png",
+      "back": "styles/crop_back.png"
+    }
+  }
 }

@@ -14,6 +14,19 @@ and checks every frame. Arthur (`chars/arthur/`) is the worked example.
 | `base_front.png`, `base_back.png` | approved front / back standing drawings, generated from the side one |
 | `raw/walk_side.png`, `raw/walk_down.png`, `raw/walk_up.png` | Sprixen **premium** walk sheets |
 
+## Player customization (skin tone, hair colour, hairstyle)
+- Every strip gets a `*_mask.png` (R = skin, G = hair) from `masks.py`; `shaders/recolor.gdshader`
+  re-shades those pixels to the player's chosen colours in-game, keeping line art and shading.
+  The reference colours are stored in `art/<name>_anims.json` (`skin_ref`, `hair_ref`).
+- **Hairstyles:** add drawings of the three approved poses with only the hair changed
+  (Sprixen, reference = the approved base sprite, "change ONLY his hairstyle") to
+  `chars/<name>/styles/` and list them in `config.json` under `hairstyles`. The build aligns each
+  to the approved body by the torso, keeps the approved face (`compose_style.py`), and builds a
+  full set `art/<name>__<style>_*` using the same walk motion (no new walk renders). The list of
+  styles goes to `art/<name>_styles.json` for the title screen.
+- Check with the real renderer: `xvfb-run -a godot --rendering-driver opengl3 --path . -s tests/render_appearance.gd`
+  (also `render_title.gd`, `render_ingame.gd`) -> screenshots in /tmp.
+
 ## Output
 `art/<name>_<side|down|up>_<walk|idle>.png` (98x148 cells, feet on row 147) and
 `art/<name>_anims.json` (frames + fps). `scripts/player.gd` loads them by name automatically

@@ -33,6 +33,9 @@ var _skin_sel := 0
 var _hair_sel := 0
 var _swatches := {"skin": [], "hair": []}
 var _preview_mat: ShaderMaterial
+var _styles: Array = []        # [[key, label], ...] from art/arthur_styles.json ("" = default)
+var _style_sel := 0
+var _style_btns: Array = []
 
 
 func _ready() -> void:
@@ -388,7 +391,7 @@ func show_title() -> void:
 	go.pressed.connect(_start)
 	title.add_child(go)
 	var hint := _label(title, 15, Color(1, 1, 1, 0.6))
-	hint.text = "Left/Right picks a hero (T = new-parts test). S / H (or LB / RB) change skin tone / hair colour.\nType a name if you like, then press Enter or click Begin. Keyboard or gamepad recommended."
+	hint.text = "Left/Right picks a hero (T = new-parts test). S / H / Y (or LB / RB / Y) change skin tone / hair colour / hairstyle.\nType a name if you like, then press Enter or click Begin. Keyboard or gamepad recommended."
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.size = Vector2(1280, 50)
 	hint.position = Vector2(0, 630)
@@ -437,11 +440,48 @@ func _build_appearance_picker() -> void:
 			b.pressed.connect(func(): _pick_look(which, k))
 			title.add_child(b)
 			_swatches[which].append(b)
+	# hairstyles built by tools/sprixen (art/<hero>__<style>_*), listed in art/<hero>_styles.json
+	_styles = [["", "Default"]]
+	var sp := "res://art/arthur_styles.json"
+	if FileAccess.file_exists(sp):
+		var d = JSON.parse_string(FileAccess.get_file_as_string(sp))
+		if d is Dictionary:
+			_styles = []
+			for key in d:
+				_styles.append(["" if key == "default" else key, d[key]])
+	var sl := _label(title, 18, Color.WHITE)
+	sl.text = "Hairstyle:"
+	sl.position = Vector2(40, 440)
+	for k in _styles.size():
+		var b := Button.new()
+		b.text = _styles[k][1]
+		b.focus_mode = Control.FOCUS_NONE
+		b.add_theme_font_size_override("font_size", 15)
+		b.size = Vector2(108, 32)
+		b.position = Vector2(40 + (k % 2) * 116, 468 + (k / 2) * 38)
+		b.pressed.connect(func(): _pick_style(k))
+		title.add_child(b)
+		_style_btns.append(b)
 	var note := _label(title, 13, Color(1, 1, 1, 0.55))
-	note.text = "Gwen's colours apply once\nher new animations are built."
-	note.position = Vector2(40, 440)
+	note.text = "Gwen's options apply once\nher new animations are built."
+	note.position = Vector2(40, 470 + ((_styles.size() + 1) / 2) * 38)
+	_pick_style(0)
 	_pick_look("skin", 0)
 	_pick_look("hair", 0)
+
+
+func _pick_style(k: int) -> void:
+	_style_sel = k
+	GameState.hairstyle = _styles[k][0]
+	for j in _style_btns.size():
+		_style_btns[j].modulate = Color(1, 0.85, 0.4) if j == k else Color(0.7, 0.7, 0.7)
+	# swap Arthur's preview to that style's front idle (+ its mask)
+	var look := "arthur" if GameState.hairstyle == "" else "arthur__" + GameState.hairstyle
+	var strip := "res://art/%s_down_idle.png" % look
+	if hero_preview.size() > 0 and _preview_mat and ResourceLoader.exists(strip):
+		var at: AtlasTexture = hero_preview[0][0].texture
+		at.atlas = load(strip)
+		_preview_mat.set_shader_parameter("mask_tex", load(strip.replace(".png", "_mask.png")))
 
 
 func _swatch_box(bg: Color, border: Color) -> StyleBoxFlat:

@@ -124,7 +124,14 @@ def main():
     cols = np.where(head[:, :, 3].max(0) > 40)[0]
     hx0, hx1 = cols.min(), cols.max() + 1
     head = head[:, hx0:hx1]
-    face = base[FACE[0]:FACE[1], hx0:hx1]
+    # where the head is in each frame is found with the drawing the frames were made from
+    # (LOCATE_BASE, e.g. the approved drawing when pasting a different hairstyle's head)
+    import os
+    if os.environ.get("LOCATE_BASE"):
+        loc = clean_body(rgba(Image.open(os.environ["LOCATE_BASE"]).convert("RGBA")))
+        face = loc[FACE[0]:FACE[1], hx0:hx1]
+    else:
+        face = base[FACE[0]:FACE[1], hx0:hx1]
     for r in range(FEATHER):                       # soft bottom edge into the collar
         head[-FEATHER + r, :, 3] *= 1 - (r + 1) / (FEATHER + 1)
 
