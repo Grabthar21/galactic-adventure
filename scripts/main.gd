@@ -17,6 +17,7 @@ var world: Node2D
 var actors: Node2D
 var player: CharacterBody2D
 var cam: Camera2D
+const CAMERA_ZOOM := 1.1        # 10% closer than 1:1 (user request 2026-11-11)
 var ui: CanvasLayer
 var tint: CanvasModulate
 
@@ -54,6 +55,7 @@ func _ready() -> void:
 	player.position = Vector2(820, 760)
 	actors.add_child(player)
 	cam = Camera2D.new()
+	cam.zoom = Vector2(CAMERA_ZOOM, CAMERA_ZOOM)
 	cam.position_smoothing_enabled = true
 	cam.position_smoothing_speed = 7.0
 	cam.offset = Vector2(0, -50)

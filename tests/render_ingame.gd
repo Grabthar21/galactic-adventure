@@ -23,9 +23,9 @@ func _process(_d: float) -> bool:
 	_f += 1
 	if _f == 5:
 		var ui = _find(root, "_pick_look")
-		ui._pick_look("skin", 4)
-		ui._pick_look("hair", 3)
-		ui._pick_style(1)
+		ui._pick_look("skin", 0)
+		ui._pick_look("hair", 0)
+		ui._pick_style(0)
 		ui._start()
 	if _f == 200:
 		root.get_texture().get_image().save_png("/tmp/ingame.png")
