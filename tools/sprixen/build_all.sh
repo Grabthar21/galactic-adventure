@@ -26,6 +26,10 @@ for n in ['v1', 'front', 'back']:
     b = np.array(Image.open(f'arthur_{n}_base.png').convert('RGBA')).astype(np.float32)
     Image.fromarray(np.clip(clean_body(b), 0, 255).astype(np.uint8)).save(f'{sys.argv[1]}/{n}_clean.png')
 PY
+# front/back drawings have slightly pinker skin than the approved side view: match it
+python3 skin_match.py "$W/v1_clean.png" "$W/front_clean.png" "$W/front_clean.png"
+python3 skin_match.py "$W/v1_clean.png" "$W/back_clean.png"  "$W/back_clean.png"
+cp "$W/front_clean.png" "$W/front_skin_base.png"; cp "$W/back_clean.png" "$W/back_skin_base.png"
 python3 breathe.py "$W/v1_clean.png"    "$W/side_idle_l.png" 32 2.4
 python3 breathe.py "$W/front_clean.png" "$W/down_idle_l.png" 32 2.4
 python3 breathe.py "$W/back_clean.png"  "$W/up_idle_l.png"   32 2.4
@@ -35,6 +39,9 @@ run() {  # name base profile cycles kind base_h fps
     python3 match_scale.py "$W/$1.png" "arthur_$2_base.png" "$W/$1_s.png" "$3"
     python3 lock_head.py "$W/$1_s.png" "arthur_$2_base.png" "$W/$1_h.png" "$4" 0 "$3" > /dev/null
     python3 fix_gloves.py "$W/$1_h.png" "$W/$1_l.png"      # no bare fingers out of the gloves
+    if [ "$3" != side ]; then                               # match skin to the approved side view
+      python3 skin_match.py "$W/v1_clean.png" "$W/$1_l.png" "$W/$1_l.png"
+    fi
   fi
   if [ "$5" = walk ]; then
     BASE_H=$6 python3 build_walk_strip.py "$W/$1_l.png" "$ART/arthur_$1.png" 133 "$7" > /dev/null
