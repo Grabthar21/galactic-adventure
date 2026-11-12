@@ -51,6 +51,9 @@ func _ready() -> void:
 	tint.color = Color(1.0, 0.95, 0.88)   # late afternoon
 	add_child(tint)
 
+	for b in world.make_building_sprites():
+		actors.add_child(b)
+
 	player = Player.new()
 	player.position = Vector2(820, 760)
 	actors.add_child(player)
@@ -92,7 +95,7 @@ func _set_area(area: String) -> void:
 	var r: Rect2 = World.ROOM if in_room else World.FARM
 	cam.limit_left = int(r.position.x) - (240 if in_room else 0)
 	cam.limit_right = int(r.end.x) + (240 if in_room else 0)
-	cam.limit_top = int(r.position.y) - (60 if in_room else 0)
+	cam.limit_top = int(r.position.y) - (60 if in_room else 110)
 	cam.limit_bottom = int(r.end.y) + (60 if in_room else 0)
 
 

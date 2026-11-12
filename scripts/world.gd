@@ -1,11 +1,25 @@
 extends Node2D
-## The farm (outdoor area) and the family home interior, drawn as placeholders in code.
+## The farm (outdoor area) and the family home interior. The farmhouse and cottage are
+## Blender-rendered sprites; everything else is still a placeholder drawn in code.
 ## Collision walls are StaticBody2D rectangles on layer 1.
 
 const FARM := Rect2(0, 0, 2400, 1600)
 const ROOM := Rect2(3000, 0, 800, 600)
 
-const HOUSE := Rect2(900, 250, 400, 250)
+## Buildings: Blender renders in art/buildings (see its README). Each sprite is drawn at the
+## hero's in-game scale (0.75) and anchored at the building's ground centre, so it y-sorts
+## with the characters. ORIGIN is that ground centre in the image's pixels.
+const ART_SCALE := 0.75
+const BUILDINGS := {
+	"farmhouse": {"tex": "res://art/buildings/farmhouse.png", "origin": Vector2(364, 668.5),
+		"pos": Vector2(1105, 413),
+		# walls, then the rain barrel (world px, relative to pos)
+		"solid": [Rect2(-240, -80, 480, 160), Rect2(205, 60, 50, 50)]},
+	"cottage": {"tex": "res://art/buildings/farm_cottage.png", "origin": Vector2(290, 464.2),
+		"pos": Vector2(470, 468),
+		"solid": [Rect2(-186, -67, 372, 134)]},
+}
+const HOUSE_DOOR := Vector2(1105, 525)
 const BARN := Rect2(1500, 230, 320, 270)
 const PEN := Rect2(1400, 800, 500, 340)
 const FIELD := Rect2(260, 620, 520, 380)
@@ -26,13 +40,20 @@ func _ready() -> void:
 		trees.append(Vector2(x + rng.randf_range(-10, 10), rng.randf_range(10, 70)))
 		trees.append(Vector2(x + rng.randf_range(-10, 10), FARM.size.y - rng.randf_range(10, 70)))
 		x += rng.randf_range(70, 110)
+	# second row behind the house roofs (the camera can now see above y = 0)
+	x = 0.0
+	while x < FARM.size.x:
+		trees.append(Vector2(x + rng.randf_range(-10, 10), rng.randf_range(-80, -40)))
+		x += rng.randf_range(70, 110)
 	var y := 100.0
 	while y < FARM.size.y - 100:
 		trees.append(Vector2(rng.randf_range(10, 70), y))
 		trees.append(Vector2(FARM.size.x - rng.randf_range(10, 70), y))
 		y += rng.randf_range(70, 110)
 	# solid areas
-	_block(Rect2(HOUSE.position.x, HOUSE.position.y, HOUSE.size.x, HOUSE.size.y - 10))
+	for b in BUILDINGS.values():
+		for r in b.solid:
+			_block(Rect2(b.pos + r.position, r.size))
 	_block(Rect2(BARN.position.x, BARN.position.y, BARN.size.x, BARN.size.y - 10))
 	# pen fence: top, right, bottom; the west side is the open gate
 	_block(Rect2(PEN.position.x, PEN.position.y, PEN.size.x, 10))
@@ -49,6 +70,23 @@ func _ready() -> void:
 	_block(Rect2(ROOM.position.x - 100, ROOM.position.y - 100, 140, ROOM.size.y + 200))
 	_block(Rect2(ROOM.end.x - 40, ROOM.position.y - 100, 140, ROOM.size.y + 200))
 	_block(Rect2(3290, 250, 220, 70))   # table
+
+
+## Sprites for the buildings; main.gd adds them to the y-sorted actors layer.
+func make_building_sprites() -> Array:
+	var out := []
+	for id in BUILDINGS:
+		var b: Dictionary = BUILDINGS[id]
+		var sp := Sprite2D.new()
+		sp.name = id
+		sp.texture = load(b.tex)
+		sp.centered = false
+		sp.offset = -b.origin
+		sp.scale = Vector2(ART_SCALE, ART_SCALE)
+		sp.position = b.pos
+		sp.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		out.append(sp)
+	return out
 
 
 func _block(r: Rect2) -> void:
@@ -74,13 +112,13 @@ func _draw() -> void:
 
 
 func _draw_farm() -> void:
-	draw_rect(FARM, Color(0.47, 0.66, 0.33))
+	draw_rect(Rect2(-200, -260, FARM.size.x + 400, FARM.size.y + 460), Color(0.47, 0.66, 0.33))
 	for d in grass_dots:
 		draw_circle(d[0], d[1], Color(0.38, 0.58, 0.27) if d[2] < 0.6 else Color(0.55, 0.74, 0.38))
 	# paths
 	var dirt := Color(0.72, 0.6, 0.42)
 	draw_rect(Rect2(1080, 500, 50, 700), dirt)
-	draw_rect(Rect2(500, 560, 1300, 50), dirt)
+	draw_rect(Rect2(440, 560, 1360, 50), dirt)
 	draw_rect(Rect2(1620, 500, 50, 80), dirt)
 	# crop field
 	draw_rect(FIELD, Color(0.55, 0.42, 0.28))
@@ -114,8 +152,6 @@ func _draw_farm() -> void:
 	draw_rect(Rect2(PEN.position.x - 4, PEN.end.y - 16, 8, 20), fence)
 	# barn
 	_building(BARN, Color(0.62, 0.25, 0.2), Color(0.4, 0.18, 0.15), Vector2(1645, BARN.end.y), true)
-	# house
-	_building(HOUSE, Color(0.85, 0.78, 0.62), Color(0.45, 0.32, 0.25), Vector2(1105, HOUSE.end.y), false)
 	# trees
 	for tp in trees:
 		draw_circle(tp + Vector2(0, 10), 34, Color(0, 0, 0, 0.18))
