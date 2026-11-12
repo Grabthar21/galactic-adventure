@@ -1,5 +1,5 @@
 extends Node2D
-## The farm (outdoor area) and the family home interior. The farmhouse and cottage are
+## The farm (outdoor area) and the family home interior. The farmhouse, cottage and barn are
 ## Blender-rendered sprites; everything else is still a placeholder drawn in code.
 ## Collision walls are StaticBody2D rectangles on layer 1.
 
@@ -18,9 +18,11 @@ const BUILDINGS := {
 	"cottage": {"tex": "res://art/buildings/farm_cottage.png", "origin": Vector2(290, 464.2),
 		"pos": Vector2(470, 468),
 		"solid": [Rect2(-186, -67, 372, 134)]},
+	"barn": {"tex": "res://art/buildings/barn.png", "origin": Vector2(307, 599.8),
+		"pos": Vector2(1645, 394),
+		"solid": [Rect2(-200, -106, 400, 212)]},
 }
 const HOUSE_DOOR := Vector2(1105, 525)
-const BARN := Rect2(1500, 230, 320, 270)
 const PEN := Rect2(1400, 800, 500, 340)
 const FIELD := Rect2(260, 620, 520, 380)
 
@@ -54,7 +56,6 @@ func _ready() -> void:
 	for b in BUILDINGS.values():
 		for r in b.solid:
 			_block(Rect2(b.pos + r.position, r.size))
-	_block(Rect2(BARN.position.x, BARN.position.y, BARN.size.x, BARN.size.y - 10))
 	# pen fence: top, right, bottom; the west side is the open gate
 	_block(Rect2(PEN.position.x, PEN.position.y, PEN.size.x, 10))
 	_block(Rect2(PEN.end.x - 10, PEN.position.y, 10, PEN.size.y))
@@ -150,8 +151,6 @@ func _draw_farm() -> void:
 		py += 50
 	draw_rect(Rect2(PEN.position.x - 4, PEN.position.y - 16, 8, 20), fence)
 	draw_rect(Rect2(PEN.position.x - 4, PEN.end.y - 16, 8, 20), fence)
-	# barn
-	_building(BARN, Color(0.62, 0.25, 0.2), Color(0.4, 0.18, 0.15), Vector2(1645, BARN.end.y), true)
 	# trees
 	for tp in trees:
 		draw_circle(tp + Vector2(0, 10), 34, Color(0, 0, 0, 0.18))
@@ -161,26 +160,6 @@ func _draw_farm() -> void:
 	# signpost hint
 	var f := ThemeDB.fallback_font
 	draw_string(f, Vector2(1420, 1180), "Livestock pen", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.2, 0.15, 0.1, 0.7))
-
-
-func _building(r: Rect2, wall: Color, roof: Color, door: Vector2, barn: bool) -> void:
-	draw_rect(Rect2(r.position.x + 8, r.end.y - 8, r.size.x, 16), Color(0, 0, 0, 0.2))
-	draw_rect(Rect2(r.position.x, r.position.y + r.size.y * 0.35, r.size.x, r.size.y * 0.65), wall)
-	draw_colored_polygon(PackedVector2Array([
-		Vector2(r.position.x - 20, r.position.y + r.size.y * 0.38),
-		Vector2(r.position.x + 30, r.position.y),
-		Vector2(r.end.x - 30, r.position.y),
-		Vector2(r.end.x + 20, r.position.y + r.size.y * 0.38)]), roof)
-	var light := Color(1.0, 0.85, 0.45) if night else Color(0.55, 0.75, 0.9)
-	if not barn:
-		draw_rect(Rect2(r.position.x + 50, r.position.y + r.size.y * 0.5, 60, 46), light)
-		draw_rect(Rect2(r.end.x - 110, r.position.y + r.size.y * 0.5, 60, 46), light)
-		draw_rect(Rect2(door.x - 28, door.y - 82, 56, 82), Color(0.4, 0.26, 0.16))
-		draw_circle(Vector2(door.x + 16, door.y - 40), 3.0, Color(0.85, 0.7, 0.3))
-	else:
-		draw_rect(Rect2(door.x - 55, door.y - 110, 110, 110), Color(0.35, 0.15, 0.12))
-		draw_line(Vector2(door.x - 55, door.y - 110), Vector2(door.x + 55, door.y), Color(0.9, 0.85, 0.8), 4.0)
-		draw_line(Vector2(door.x + 55, door.y - 110), Vector2(door.x - 55, door.y), Color(0.9, 0.85, 0.8), 4.0)
 
 
 func _draw_room() -> void:

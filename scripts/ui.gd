@@ -222,8 +222,10 @@ func say(speaker: String, text: String) -> void:
 	_advance = false
 	var total := dlg_text.text.length()
 	var shown := 0.0
+	_fit_dialogue()
 	while _typing:
 		await get_tree().process_frame
+		_fit_dialogue()
 		shown += get_process_delta_time() * 55.0
 		dlg_text.visible_ratio = clampf(shown / maxf(total, 1), 0.0, 1.0)
 		if dlg_text.visible_ratio >= 1.0:
@@ -257,9 +259,11 @@ func choose(speaker: String, text: String, options: Array) -> int:
 		choice_box.add_child(b)
 		_choices.append(b)
 	_refresh_choices()
+	_fit_dialogue()
 	# wait a frame so the key that opened this doesn't pick instantly
 	await get_tree().process_frame
 	while _choice_index < 0:
+		_fit_dialogue()
 		await get_tree().process_frame
 	var picked := _choice_index
 	_clear_choices()
@@ -267,6 +271,15 @@ func choose(speaker: String, text: String, options: Array) -> int:
 	busy = false
 	closed_frame = Engine.get_process_frames()
 	return picked
+
+
+## Keep the whole dialogue box on screen: it shrinks to its content and grows upward
+## from the bottom edge, so long lines and choice lists are never cut off.
+func _fit_dialogue() -> void:
+	dlg_panel.reset_size()
+	dlg_panel.size.x = 1000
+	var view_h := get_viewport().get_visible_rect().size.y
+	dlg_panel.position.y = view_h - 34.0 - dlg_panel.size.y
 
 
 func _clear_choices() -> void:

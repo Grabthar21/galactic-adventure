@@ -40,8 +40,8 @@ func _process(_d: float) -> bool:
 		_shot(Vector2(560, 575), "")
 	if _f == 200:
 		root.get_texture().get_image().save_png("/tmp/bld_cottage.png")
-		_shot(Vector2(1105, 300), "")
+		_shot(Vector2(1640, 560), "")
 	if _f == 225:
-		root.get_texture().get_image().save_png("/tmp/bld_behind.png")
+		root.get_texture().get_image().save_png("/tmp/bld_barn.png")
 		return true
 	return false
