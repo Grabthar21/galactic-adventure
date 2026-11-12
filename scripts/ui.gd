@@ -29,6 +29,10 @@ var _hero_sel := 0
 var name_edit: LineEdit
 var hero_preview: Array = []
 var hero_test_btn: Button
+var _skin_sel := 0
+var _hair_sel := 0
+var _swatches := {"skin": [], "hair": []}
+var _preview_mat: ShaderMaterial
 
 
 func _ready() -> void:
@@ -333,7 +337,12 @@ func show_title() -> void:
 		var hero: String = ["arthur", "gwen"][i]
 		var tr := TextureRect.new()
 		var at := AtlasTexture.new()
-		at.atlas = load("res://art/%s_frames.png" % hero)
+		var strip := "res://art/%s_down_idle.png" % hero
+		if ResourceLoader.exists(strip) and ResourceLoader.exists(strip.replace(".png", "_mask.png")):
+			at.atlas = load(strip)
+			tr.material = _make_preview_material(hero, strip.replace(".png", "_mask.png"))
+		else:
+			at.atlas = load("res://art/%s_frames.png" % hero)
 		at.region = Rect2(0, 0, 98, 148)
 		tr.texture = at
 		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -369,6 +378,7 @@ func show_title() -> void:
 	test_btn.pressed.connect(func(): _pick_hero(2))
 	title.add_child(test_btn)
 	hero_test_btn = test_btn
+	_build_appearance_picker()
 	var go := Button.new()
 	go.text = "Begin"
 	go.focus_mode = Control.FOCUS_NONE
@@ -378,12 +388,89 @@ func show_title() -> void:
 	go.pressed.connect(_start)
 	title.add_child(go)
 	var hint := _label(title, 15, Color(1, 1, 1, 0.6))
-	hint.text = "Left/Right picks a hero (T = new-parts test). Type a name if you like, then press Enter or click Begin.\nKeyboard or gamepad recommended."
+	hint.text = "Left/Right picks a hero (T = new-parts test). S / H (or LB / RB) change skin tone / hair colour.\nType a name if you like, then press Enter or click Begin. Keyboard or gamepad recommended."
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.size = Vector2(1280, 50)
 	hint.position = Vector2(0, 630)
 	_pick_hero(0)
 	title.move_to_front()
+
+
+# ---------- appearance (skin tone / hair colour) ----------
+
+func _make_preview_material(hero: String, mask_path: String) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/recolor.gdshader")
+	m.set_shader_parameter("mask_tex", load(mask_path))
+	m.set_shader_parameter("has_mask", true)
+	var path := "res://art/%s_anims.json" % hero
+	if FileAccess.file_exists(path):
+		var d = JSON.parse_string(FileAccess.get_file_as_string(path))
+		if d is Dictionary and d.has("skin_ref") and d.has("hair_ref"):
+			m.set_shader_parameter("skin_ref", Vector3(d.skin_ref[0], d.skin_ref[1], d.skin_ref[2]))
+			m.set_shader_parameter("hair_ref", Vector3(d.hair_ref[0], d.hair_ref[1], d.hair_ref[2]))
+	if hero == "arthur":
+		_preview_mat = m
+	return m
+
+
+func _build_appearance_picker() -> void:
+	var rows := [["Skin", "skin", GameState.SKIN_TONES, Color(0.945, 0.702, 0.51)],
+			["Hair", "hair", GameState.HAIR_COLORS, Color(0.482, 0.278, 0.173)]]
+	for r in rows.size():
+		var lab := _label(title, 18, Color.WHITE)
+		lab.text = rows[r][0] + ":"
+		lab.position = Vector2(40, 200 + r * 120)
+		var presets: Array = rows[r][2]
+		for k in presets.size():
+			var col: Color = presets[k][1] if presets[k][1] is Color else rows[r][3]
+			var b := Button.new()
+			b.focus_mode = Control.FOCUS_NONE
+			b.tooltip_text = presets[k][0]
+			b.size = Vector2(38, 38)
+			b.position = Vector2(40 + (k % 4) * 46, 228 + r * 120 + (k / 4) * 46)
+			var sb := _swatch_box(col, Color(0.15, 0.15, 0.2))
+			b.add_theme_stylebox_override("normal", sb)
+			b.add_theme_stylebox_override("hover", _swatch_box(col, Color(1, 1, 1, 0.7)))
+			b.add_theme_stylebox_override("pressed", sb)
+			var which: String = rows[r][1]
+			b.pressed.connect(func(): _pick_look(which, k))
+			title.add_child(b)
+			_swatches[which].append(b)
+	var note := _label(title, 13, Color(1, 1, 1, 0.55))
+	note.text = "Gwen's colours apply once\nher new animations are built."
+	note.position = Vector2(40, 440)
+	_pick_look("skin", 0)
+	_pick_look("hair", 0)
+
+
+func _swatch_box(bg: Color, border: Color) -> StyleBoxFlat:
+	var s := _box(bg, border)
+	s.set_content_margin_all(2)
+	s.set_corner_radius_all(8)
+	return s
+
+
+func _pick_look(which: String, k: int) -> void:
+	if which == "skin":
+		_skin_sel = k
+		GameState.skin_color = GameState.SKIN_TONES[k][1]
+	else:
+		_hair_sel = k
+		GameState.hair_color = GameState.HAIR_COLORS[k][1]
+	for j in _swatches[which].size():
+		var sel: bool = j == k
+		_swatches[which][j].scale = Vector2.ONE * (1.12 if sel else 1.0)
+		_swatches[which][j].modulate = Color.WHITE if sel else Color(0.8, 0.8, 0.8)
+	if _preview_mat:
+		var s = GameState.skin_color
+		var h = GameState.hair_color
+		_preview_mat.set_shader_parameter("recolor_skin", s is Color)
+		_preview_mat.set_shader_parameter("recolor_hair", h is Color)
+		if s is Color:
+			_preview_mat.set_shader_parameter("skin_color", Vector3(s.r, s.g, s.b))
+		if h is Color:
+			_preview_mat.set_shader_parameter("hair_color", Vector3(h.r, h.g, h.b))
 
 
 func _pick_hero(i: int) -> void:

@@ -7,7 +7,8 @@ Expects tools/sprixen/chars/<name>/ with:
     base_side.png, base_front.png, base_back.png   approved standing drawings (256x256)
     raw/walk_side.png, raw/walk_down.png, raw/walk_up.png   Sprixen walk sheets (premium)
 
-Writes art/<name>_<side|down|up>_<walk|idle>.png (98x148 cells) and art/<name>_anims.json
+Writes art/<name>_<side|down|up>_<walk|idle>.png (98x148 cells), a matching *_mask.png
+(R = skin, G = hair; used by shaders/recolor.gdshader for player customization) and art/<name>_anims.json
 (frame counts + fps, read by scripts/player.gd). Exit code 1 if any QA check fails.
 
 Per walk:  find_loop -> match_scale -> lock_head (+ matte clean) -> fix_gloves -> skin_match
@@ -74,6 +75,7 @@ def main():
         d = views[v]
         prof = json.dumps({k: d["prof"][k] for k in ("HEAD_TOP", "BROW", "CHIN_CUT", "FACE")})
         base_h = str(d["prof"]["HEIGHT"])
+        head_px = round((d["prof"]["CHIN_CUT"] - d["prof"]["HEAD_TOP"]) / d["prof"]["HEIGHT"] * H)
 
         # ---- walk
         raw = os.path.join(cdir, cfg["walks"][direction]["raw"])
@@ -91,6 +93,7 @@ def main():
         fps = round(frames / cycle, 2)
         strip = os.path.join(ART, f"{name}_{direction}_walk.png")
         run("build_walk_strip.py", lk, strip, H, fps, env={"BASE_H": base_h})
+        run("masks.py", strip, strip.replace(".png", "_mask.png"), head_px)   # skin/hair for recolouring
         manifest[f"walk_{direction}"] = {"frames": frames, "fps": fps}
         print(f"walk_{direction}: {out}")
 
@@ -100,12 +103,22 @@ def main():
         run("breathe.py", d["clean"], br, n_idle, idle.get("lift_px", 2.4))
         istrip = os.path.join(ART, f"{name}_{direction}_idle.png")
         run("build_idle_strip.py", br, istrip, H, env={"BASE_H": base_h})
+        run("masks.py", istrip, istrip.replace(".png", "_mask.png"), head_px)
         manifest[f"idle_{direction}"] = {"frames": n_idle, "fps": idle.get("fps", 12)}
         if direction == "side":
             for x in cfg.get("extra_idles", []):
-                run("build_idle_strip.py", br, os.path.join(ART, x["out"]), x["height"],
-                    env={"BASE_H": base_h})
+                xo = os.path.join(ART, x["out"])
+                run("build_idle_strip.py", br, xo, x["height"], env={"BASE_H": base_h})
+                run("masks.py", xo, xo.replace(".png", "_mask.png"),
+                    round(head_px * x["height"] / H))
 
+    # reference colours the recolour shader converts FROM (median of solid skin / hair pixels)
+    st = np.array(Image.open(os.path.join(ART, f"{name}_side_walk.png")).convert("RGBA")).astype(float)
+    mk = np.array(Image.open(os.path.join(ART, f"{name}_side_walk_mask.png"))).astype(float)
+    sel_s = (mk[..., 0] >= 250) & (st[..., 3] >= 250) & (st[..., :3].mean(2) > 150)
+    sel_h = (mk[..., 1] >= 250) & (st[..., 3] >= 250)
+    manifest["skin_ref"] = [round(v / 255, 4) for v in np.median(st[sel_s][:, :3], 0)]
+    manifest["hair_ref"] = [round(v / 255, 4) for v in np.median(st[sel_h][:, :3], 0)]
     with open(os.path.join(ART, f"{name}_anims.json"), "w") as fh:
         json.dump(manifest, fh, indent=1)
 

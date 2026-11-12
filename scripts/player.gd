@@ -42,6 +42,8 @@ var knock := Vector2.ZERO
 
 var sprite: AnimatedSprite2D
 var fx: Node2D
+var _masks := {}               # animation name -> skin/hair mask strip (player customization)
+var _recolor: ShaderMaterial
 
 
 func _ready() -> void:
@@ -111,7 +113,46 @@ func setup(hero: String) -> void:
 		_add_anim(frames, tex, "walk_side", [[1, 0], [1, 1], [1, 2], [1, 3]], 8.0)
 		_add_anim(frames, tex, "idle_side", [[1, 0]], 1.0)
 	sprite.sprite_frames = frames
+	_setup_recolor(anims)
 	sprite.play("idle_down")
+
+
+## Skin / hair customization: shaders/recolor.gdshader with the mask strip of the current animation.
+func _setup_recolor(anims: Dictionary) -> void:
+	_recolor = ShaderMaterial.new()
+	_recolor.shader = load("res://shaders/recolor.gdshader")
+	if anims.has("skin_ref"):
+		var s: Array = anims["skin_ref"]
+		_recolor.set_shader_parameter("skin_ref", Vector3(s[0], s[1], s[2]))
+	if anims.has("hair_ref"):
+		var h: Array = anims["hair_ref"]
+		_recolor.set_shader_parameter("hair_ref", Vector3(h[0], h[1], h[2]))
+	sprite.material = _recolor
+	if not sprite.animation_changed.is_connected(_apply_mask):
+		sprite.animation_changed.connect(_apply_mask)
+	set_appearance(GameState.skin_color, GameState.hair_color)
+
+
+## skin / hair: a Color, or null to keep the colours as drawn.
+func set_appearance(skin, hair) -> void:
+	if _recolor == null:
+		return
+	_recolor.set_shader_parameter("recolor_skin", skin is Color)
+	_recolor.set_shader_parameter("recolor_hair", hair is Color)
+	if skin is Color:
+		_recolor.set_shader_parameter("skin_color", Vector3(skin.r, skin.g, skin.b))
+	if hair is Color:
+		_recolor.set_shader_parameter("hair_color", Vector3(hair.r, hair.g, hair.b))
+	_apply_mask()
+
+
+func _apply_mask() -> void:
+	if _recolor == null:
+		return
+	var m = _masks.get(String(sprite.animation))
+	_recolor.set_shader_parameter("has_mask", m != null)
+	if m != null:
+		_recolor.set_shader_parameter("mask_tex", m)
 
 
 func _load_manifest(hero_name: String) -> Dictionary:
@@ -141,6 +182,12 @@ func _add_strip(frames: SpriteFrames, anim: String, path: String, fps: float) ->
 
 
 func _add_anim(frames: SpriteFrames, tex: Texture2D, anim: String, cells: Array, fps: float) -> void:
+	# a strip built by tools/sprixen has a matching <strip>_mask.png for skin/hair recolouring
+	var mask_path := tex.resource_path.replace(".png", "_mask.png")
+	if tex.resource_path.ends_with(".png") and ResourceLoader.exists(mask_path):
+		_masks[anim] = load(mask_path)
+	else:
+		_masks.erase(anim)
 	frames.add_animation(anim)
 	frames.set_animation_speed(anim, fps)
 	frames.set_animation_loop(anim, true)
