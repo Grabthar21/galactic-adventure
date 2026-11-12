@@ -69,18 +69,20 @@ func setup(hero: String) -> void:
 	walk_speed = SPEED_V2 if hero == "arthur_v2" else SPEED
 	var frames := SpriteFrames.new()
 	frames.remove_animation("default")
+	# Frame rates written by tools/sprixen/build_char.py (art/<hero>_anims.json), if present
+	var anims := _load_manifest(base)
 	# Sheet rows: 0 idle (front), 1 walk side (faces right), 2 walk down, 3 walk up
 	# Front/back: Sprixen strips (art/<hero>_<down|up>_<walk|idle>.png, tools/sprixen) when present,
 	# otherwise the original sheet.
-	if not _add_strip(frames, "idle_down", "res://art/%s_down_idle.png" % base, IDLE_SIDE_FPS):
+	if not _add_strip(frames, "idle_down", "res://art/%s_down_idle.png" % base, _fps(anims, "idle_down", IDLE_SIDE_FPS)):
 		_add_anim(frames, tex, "idle_down", [[0, 0], [0, 0], [0, 1], [0, 0], [0, 3], [0, 0], [0, 0], [0, 2]], 4.0)
 	# Front/back walks: the sheet's 4th frame repeats the 3rd pose, so play 0,1,2,1 for a clean L-R-L-R step.
 	var front_back_order := [0, 1, 2, 1] if base == "arthur" else [0, 1, 2, 3]
-	if not _add_strip(frames, "walk_down", "res://art/%s_down_walk.png" % base, WALK_FPS_BY_DIR.down):
+	if not _add_strip(frames, "walk_down", "res://art/%s_down_walk.png" % base, _fps(anims, "walk_down", WALK_FPS_BY_DIR.down)):
 		_add_anim(frames, tex, "walk_down", front_back_order.map(func(c): return [2, c]), 8.0)
-	if not _add_strip(frames, "walk_up", "res://art/%s_up_walk.png" % base, WALK_FPS_BY_DIR.up):
+	if not _add_strip(frames, "walk_up", "res://art/%s_up_walk.png" % base, _fps(anims, "walk_up", WALK_FPS_BY_DIR.up)):
 		_add_anim(frames, tex, "walk_up", front_back_order.map(func(c): return [3, c]), 8.0)
-	if not _add_strip(frames, "idle_up", "res://art/%s_up_idle.png" % base, IDLE_SIDE_FPS):
+	if not _add_strip(frames, "idle_up", "res://art/%s_up_idle.png" % base, _fps(anims, "idle_up", IDLE_SIDE_FPS)):
 		_add_anim(frames, tex, "idle_up", [[3, 0]], 1.0)
 	var side_path := "res://art/%s_side_walk.png" % hero
 	if ResourceLoader.exists(side_path):
@@ -90,7 +92,10 @@ func setup(hero: String) -> void:
 		var cells := []
 		for c in count:
 			cells.append([0, c])
-		_add_anim(frames, side_tex, "walk_side", cells, SIDE_WALK_FPS_BY_HERO.get(hero, SIDE_WALK_FPS))
+		var side_fps: float = SIDE_WALK_FPS_BY_HERO.get(hero, SIDE_WALK_FPS)
+		if hero == base:
+			side_fps = _fps(anims, "walk_side", side_fps)
+		_add_anim(frames, side_tex, "walk_side", cells, side_fps)
 		var idle_path := "res://art/%s_side_idle.png" % hero
 		if ResourceLoader.exists(idle_path):
 			# Breathing idle loop (tools/sprixen/build_idle_strip.py); a single-cell file still works
@@ -99,7 +104,7 @@ func setup(hero: String) -> void:
 			var idle_cells := []
 			for c in idle_count:
 				idle_cells.append([0, c])
-			_add_anim(frames, idle_tex, "idle_side", idle_cells, IDLE_SIDE_FPS if idle_count > 1 else 1.0)
+			_add_anim(frames, idle_tex, "idle_side", idle_cells, _fps(anims, "idle_side", IDLE_SIDE_FPS) if idle_count > 1 else 1.0)
 		else:
 			_add_anim(frames, side_tex, "idle_side", [[0, count / 3]], 1.0)
 	else:
@@ -107,6 +112,20 @@ func setup(hero: String) -> void:
 		_add_anim(frames, tex, "idle_side", [[1, 0]], 1.0)
 	sprite.sprite_frames = frames
 	sprite.play("idle_down")
+
+
+func _load_manifest(hero_name: String) -> Dictionary:
+	var path := "res://art/%s_anims.json" % hero_name
+	if not FileAccess.file_exists(path):
+		return {}
+	var data = JSON.parse_string(FileAccess.get_file_as_string(path))
+	return data if data is Dictionary else {}
+
+
+func _fps(anims: Dictionary, key: String, fallback: float) -> float:
+	if anims.has(key) and anims[key] is Dictionary and anims[key].has("fps"):
+		return float(anims[key]["fps"])
+	return fallback
 
 
 ## Adds a one-row strip of CELL-sized frames as a looping animation; false if the file is missing.

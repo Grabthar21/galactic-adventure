@@ -2,16 +2,16 @@
 base sprite (Sprixen draws each animation a few % bigger or smaller).
 The scale is found by matching the base sprite's head at different sizes against the
 frames (OpenCV template matching), then every frame is resized about its feet/centre.
-usage: python3 match_scale.py <sheet.png> <base.png> <out.png> <profile side|front|back>"""
+usage: python3 match_scale.py <sheet.png> <base.png> <out.png> <profile: side|front|back or JSON head rows>"""
 import sys
 import cv2
 import numpy as np
 from PIL import Image
-from lock_head import PROFILES, SRC
+from lock_head import profile, SRC
 
 sheet = Image.open(sys.argv[1]).convert("RGBA")
 base = np.array(Image.open(sys.argv[2]).convert("RGBA"))
-prof = PROFILES[sys.argv[4]]
+prof = profile(sys.argv[4])
 n = sheet.width // SRC
 frames = [np.array(sheet.crop((i * SRC, 0, (i + 1) * SRC, SRC))) for i in range(n)]
 

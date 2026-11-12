@@ -10,7 +10,8 @@ Per frame:
   4. warp the hair rows by a lagged copy of the bob (hair trails the head by ~2
      frames and settles), fading to zero at the brow so the face stays rigid.
 
-usage: python3 lock_head.py <sheet.png> <base_sprite.png> <out_sheet.png> [cycles=2] [hair_gain=0.8] [profile=side]
+usage: python3 lock_head.py <sheet.png> <base_sprite.png> <out_sheet.png> [cycles=2] [hair_gain=0.8] [profile]
+  profile = side|front|back (Arthur) or a JSON dict of head rows from head_rows.py
   cycles = how many up/down bobs one loop contains (2 for a walk, 1 for an idle)
 """
 import sys
@@ -27,6 +28,18 @@ PROFILES = {
     "front": dict(HEAD_TOP=14, BROW=46, CHIN_CUT=84, FACE=(48, 78)),   # arthur_front_base.png
     "back":  dict(HEAD_TOP=20, BROW=46, CHIN_CUT=84, FACE=(44, 78)),   # arthur_back_base.png (hair)
 }
+
+
+def profile(arg):
+    """A named Arthur profile, or a JSON dict from head_rows.py (any character)."""
+    import json
+    if arg.strip().startswith("{"):
+        d = json.loads(arg)
+        d["FACE"] = tuple(d["FACE"])
+        return d
+    return PROFILES[arg]
+
+
 HEAD_TOP, BROW, CHIN_CUT = 18, 50, 88
 FACE = (54, 84)
 FEATHER = 4                                # soft blend rows at the bottom of the pasted head
@@ -101,7 +114,7 @@ def main():
     cycles = int(sys.argv[4]) if len(sys.argv) > 4 else 2
     hair_gain = float(sys.argv[5]) if len(sys.argv) > 5 else 0.8
     global HEAD_TOP, BROW, CHIN_CUT, FACE
-    prof = PROFILES[sys.argv[6] if len(sys.argv) > 6 else "side"]
+    prof = profile(sys.argv[6] if len(sys.argv) > 6 else "side")
     HEAD_TOP, BROW, CHIN_CUT, FACE = prof["HEAD_TOP"], prof["BROW"], prof["CHIN_CUT"], prof["FACE"]
     n = sheet.width // SRC
     frames = [rgba(sheet.crop((i * SRC, 0, (i + 1) * SRC, SRC))) for i in range(n)]

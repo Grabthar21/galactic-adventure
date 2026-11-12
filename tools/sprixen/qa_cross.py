@@ -1,15 +1,18 @@
-"""Cross-animation check: Arthur must be the same size and in the same place in every
+"""usage: python3 qa_cross.py <name>
+Cross-animation check: Arthur must be the same size and in the same place in every
 animation of a direction (walk vs idle), and centred/grounded identically in all of them."""
 import sys
 import numpy as np
 from PIL import Image
 
-ART = "../../art"
+import os
+ART = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "art")
+NAME = sys.argv[1] if len(sys.argv) > 1 else "arthur"
 CELL_W = 98
 
 
 def measure(name):
-    a = np.array(Image.open(f"{ART}/arthur_{name}.png"))[:, :, 3]
+    a = np.array(Image.open(f"{ART}/{NAME}_{name}.png"))[:, :, 3]
     W, T, C, B = [], [], [], []
     for i in range(a.shape[1] // CELL_W):
         m = a[:, i * CELL_W:(i + 1) * CELL_W] >= 128
