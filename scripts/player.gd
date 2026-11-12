@@ -12,7 +12,7 @@ const SIDE_WALK_FPS := 20.0
 const SIDE_WALK_FPS_BY_HERO := {"arthur": 36.0}
 # Front/back Sprixen walk strips: fps chosen so a two-step cycle keeps pace with SPEED
 const WALK_FPS_BY_DIR := {"down": 37.5, "up": 30.0}   # 30- and 24-frame loops -> 0.8 s per two steps, same cadence as the side walk
-const IDLE_SIDE_FPS := 12.0     # 16-frame breath loop = ~1.3 s per breath
+const IDLE_SIDE_FPS := 12.0     # 32-frame breathing loops (tools/sprixen/breathe.py) = ~2.7 s per calm breath
 var walk_speed := SPEED
 const ROLL_DIST := 105.0      # about one character height at gameplay scale
 const ROLL_TIME := 0.32

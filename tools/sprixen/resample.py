@@ -88,3 +88,19 @@ def remove_specks(img, max_px=10):
             if s <= max_px:
                 a[lab == k] = 0
     return Image.fromarray(a)
+
+
+def restore_outline(img, darken=0.42, min_lum=95):
+    """The art has a thin dark outline that shrinking to game size averages away, letting
+    skin/blush and shirt colour run straight to the edge ("colour coming off the face").
+    Re-ink the outermost ring: a light edge pixel becomes a dark version of its own colour,
+    like the original line art. Dark pixels (hair tips, existing outline) are left alone."""
+    from scipy import ndimage
+    a = np.array(img.convert("RGBA")).astype(np.float32)
+    m = a[:, :, 3] >= 96
+    ring = m & ndimage.binary_dilation(~m)          # 8-conn? use 4-conn ring (default cross)
+    lum = a[:, :, :3].mean(2)
+    sel = ring & (lum > min_lum)
+    a[sel, :3] *= darken
+    a[sel, 3] = np.maximum(a[sel, 3], 200)
+    return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8))

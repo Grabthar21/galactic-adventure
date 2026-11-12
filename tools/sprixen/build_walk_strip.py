@@ -14,7 +14,7 @@ usage: python3 build_walk_strip.py <sheet.png> <out.png> [target_height=133] [fp
 import sys
 import numpy as np
 from PIL import Image
-from resample import downscale, defringe, snap_feet, fill_pinholes, remove_specks
+from resample import downscale, defringe, snap_feet, fill_pinholes, remove_specks, restore_outline
 
 SRC = 256
 CELL_W, CELL_H = 98, 148
@@ -72,7 +72,7 @@ def main():
         ys, xs = np.where(a)
         low = xs[ys > d["bot"] - 4]
         foot_x.append((low.min() - d["torso"]) * s)   # toe-side unused; heel edge
-    strip = snap_feet(remove_specks(fill_pinholes(defringe(strip))))
+    strip = snap_feet(fill_pinholes(restore_outline(remove_specks(fill_pinholes(defringe(strip))))))
     strip.save(out)
     # planted-foot slide per frame (backwards = positive speed)
     dx = [foot_x[i] - foot_x[(i + 1) % n] for i in range(n)]

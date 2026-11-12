@@ -10,17 +10,32 @@ W=$(mktemp -d)
 
 # side (3/4 right): premium walk loop + idle
 python3 find_loop.py arthur_walk_premium_sheet.png "$W/side_walk.png" 20 44
-python3 normalize_swell.py arthur_idle_sprixen_sheet.png "$W/side_idle.png" 0.25
 # front (down)
 python3 find_loop.py arthur_down_walk_premium.png "$W/down_walk.png" 16 40
-python3 normalize_swell.py arthur_down_idle_sprixen.png "$W/down_idle.png" 0.25
-# back (up): idle frames 11-15 shuffle the feet, so the loop is 0-10
+# back (up)
 python3 find_loop.py arthur_up_walk_premium.png "$W/up_walk.png" 16 40
-python3 normalize_swell.py arthur_up_idle_sprixen.png "$W/up_idle.png" 0.25 0,10
+
+# Idles: Sprixen's idle frames jump between poses and ghost the chin, so each idle is the
+# approved standing drawing itself (cleaned), breathing gently (breathe.py): 32 frames,
+# chest/shoulders/head lift 2.4 source px (~1.5 game px), legs and feet perfectly still.
+python3 - "$W" <<'PY'
+import sys, numpy as np
+from PIL import Image
+from lock_head import clean_body
+for n in ['v1', 'front', 'back']:
+    b = np.array(Image.open(f'arthur_{n}_base.png').convert('RGBA')).astype(np.float32)
+    Image.fromarray(np.clip(clean_body(b), 0, 255).astype(np.uint8)).save(f'{sys.argv[1]}/{n}_clean.png')
+PY
+python3 breathe.py "$W/v1_clean.png"    "$W/side_idle_l.png" 32 2.4
+python3 breathe.py "$W/front_clean.png" "$W/down_idle_l.png" 32 2.4
+python3 breathe.py "$W/back_clean.png"  "$W/up_idle_l.png"   32 2.4
 
 run() {  # name base profile cycles kind base_h fps
-  python3 match_scale.py "$W/$1.png" "arthur_$2_base.png" "$W/$1_s.png" "$3"
-  python3 lock_head.py "$W/$1_s.png" "arthur_$2_base.png" "$W/$1_l.png" "$4" 0 "$3" > /dev/null
+  if [ "$5" = walk ]; then
+    python3 match_scale.py "$W/$1.png" "arthur_$2_base.png" "$W/$1_s.png" "$3"
+    python3 lock_head.py "$W/$1_s.png" "arthur_$2_base.png" "$W/$1_h.png" "$4" 0 "$3" > /dev/null
+    python3 fix_gloves.py "$W/$1_h.png" "$W/$1_l.png"      # no bare fingers out of the gloves
+  fi
   if [ "$5" = walk ]; then
     BASE_H=$6 python3 build_walk_strip.py "$W/$1_l.png" "$ART/arthur_$1.png" 133 "$7" > /dev/null
   else
