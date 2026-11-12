@@ -1,0 +1,36 @@
+{
+ "walk_side": {
+  "frames": 29,
+  "fps": 36.25
+ },
+ "idle_side": {
+  "frames": 32,
+  "fps": 12
+ },
+ "walk_down": {
+  "frames": 30,
+  "fps": 37.5
+ },
+ "idle_down": {
+  "frames": 32,
+  "fps": 12
+ },
+ "walk_up": {
+  "frames": 24,
+  "fps": 30.0
+ },
+ "idle_up": {
+  "frames": 32,
+  "fps": 12
+ },
+ "skin_ref": [
+  0.9373,
+  0.698,
+  0.5098
+ ],
+ "hair_ref": [
+  0.4667,
+  0.2745,
+  0.1804
+ ]
+}

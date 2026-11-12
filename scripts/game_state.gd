@@ -7,6 +7,29 @@ var hero_name := "Arthur"
 var valor := 0
 var pup_choice := ""          # "freed" or "shooed"
 var stranger_attitude := ""   # "willing" or "begrudging"
+# Appearance (title screen). null = the drawing's own colours.
+var skin_color = null          # Color or null
+var hair_color = null          # Color or null
+var hairstyle := ""            # "" = default; else a style built by tools/sprixen (art/<hero>__<style>_*)
+
+# Customization presets. Index 0 = as drawn.
+const SKIN_TONES := [
+	["As drawn", null],
+	["Fair", Color(1.0, 0.86, 0.74)],
+	["Tan", Color(0.85, 0.62, 0.45)],
+	["Olive", Color(0.76, 0.56, 0.38)],
+	["Brown", Color(0.58, 0.39, 0.26)],
+	["Deep", Color(0.42, 0.27, 0.18)],
+]
+const HAIR_COLORS := [
+	["As drawn", null],
+	["Black", Color(0.12, 0.10, 0.10)],
+	["Dark brown", Color(0.30, 0.19, 0.12)],
+	["Auburn", Color(0.55, 0.20, 0.10)],
+	["Ginger", Color(0.85, 0.42, 0.16)],
+	["Blond", Color(0.93, 0.78, 0.45)],
+	["Platinum", Color(0.92, 0.90, 0.84)],
+]
 
 
 func _ready() -> void:

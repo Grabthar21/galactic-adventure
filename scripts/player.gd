@@ -4,7 +4,16 @@ extends CharacterBody2D
 signal hp_changed(hp: int, max_hp: int)
 signal died
 
-const SPEED := 200.0
+const SPEED := 119.0           # matched to the traced stride (95 cell px per 0.6 s cycle) so the planted foot does not slide
+const SPEED_V2 := 119.0         # cut-out test hero: matched to its stride (tools/cutout)
+const SIDE_WALK_FPS := 20.0
+# Arthur's Sprixen premium walk: 29-frame loop; at 36 fps one cycle (2 steps) takes 0.8 s,
+# which covers ~95 px of ground, so the feet keep pace with SPEED.
+const SIDE_WALK_FPS_BY_HERO := {"arthur": 36.0}
+# Front/back Sprixen walk strips: fps chosen so a two-step cycle keeps pace with SPEED
+const WALK_FPS_BY_DIR := {"down": 37.5, "up": 30.0}   # 30- and 24-frame loops -> 0.8 s per two steps, same cadence as the side walk
+const IDLE_SIDE_FPS := 12.0     # 32-frame breathing loops (tools/sprixen/breathe.py) = ~2.7 s per calm breath
+var walk_speed := SPEED
 const ROLL_DIST := 105.0      # about one character height at gameplay scale
 const ROLL_TIME := 0.32
 const ROLL_COOLDOWN := 0.15
@@ -33,6 +42,8 @@ var knock := Vector2.ZERO
 
 var sprite: AnimatedSprite2D
 var fx: Node2D
+var _masks := {}               # animation name -> skin/hair mask strip (player customization)
+var _recolor: ShaderMaterial
 
 
 func _ready() -> void:
@@ -53,30 +64,134 @@ func _ready() -> void:
 
 
 func setup(hero: String) -> void:
-	var tex: Texture2D = load("res://art/%s_frames.png" % hero)
+	# "arthur_v2" = test of the new cut-out parts: side views from the parts rig,
+	# front/back still from the approved Arthur sheet
+	var base := "arthur" if hero == "arthur_v2" else hero
+	var tex: Texture2D = load("res://art/%s_frames.png" % base)
+	walk_speed = SPEED_V2 if hero == "arthur_v2" else SPEED
 	var frames := SpriteFrames.new()
 	frames.remove_animation("default")
+	# Hairstyle: tools/sprixen builds a full strip set per style as art/<hero>__<style>_*
+	var look := base
+	if GameState.hairstyle != "" and ResourceLoader.exists("res://art/%s__%s_down_walk.png" % [base, GameState.hairstyle]):
+		look = "%s__%s" % [base, GameState.hairstyle]
+	# Frame rates written by tools/sprixen/build_char.py (art/<look>_anims.json), if present
+	var anims := _load_manifest(look)
 	# Sheet rows: 0 idle (front), 1 walk side (faces right), 2 walk down, 3 walk up
-	_add_anim(frames, tex, "idle_down", [[0, 0], [0, 0], [0, 1], [0, 0], [0, 3], [0, 0], [0, 0], [0, 2]], 4.0)
+	# Front/back: Sprixen strips (art/<hero>_<down|up>_<walk|idle>.png, tools/sprixen) when present,
+	# otherwise the original sheet.
+	if not _add_strip(frames, "idle_down", "res://art/%s_down_idle.png" % look, _fps(anims, "idle_down", IDLE_SIDE_FPS)):
+		_add_anim(frames, tex, "idle_down", [[0, 0], [0, 0], [0, 1], [0, 0], [0, 3], [0, 0], [0, 0], [0, 2]], 4.0)
 	# Front/back walks: the sheet's 4th frame repeats the 3rd pose, so play 0,1,2,1 for a clean L-R-L-R step.
-	var front_back_order := [0, 1, 2, 1] if hero == "arthur" else [0, 1, 2, 3]
-	_add_anim(frames, tex, "walk_down", front_back_order.map(func(c): return [2, c]), 7.0)
-	_add_anim(frames, tex, "walk_up", front_back_order.map(func(c): return [3, c]), 7.0)
-	_add_anim(frames, tex, "idle_up", [[3, 0]], 1.0)
-	var side_path := "res://art/%s_side_walk.png" % hero
+	var front_back_order := [0, 1, 2, 1] if base == "arthur" else [0, 1, 2, 3]
+	if not _add_strip(frames, "walk_down", "res://art/%s_down_walk.png" % look, _fps(anims, "walk_down", WALK_FPS_BY_DIR.down)):
+		_add_anim(frames, tex, "walk_down", front_back_order.map(func(c): return [2, c]), 8.0)
+	if not _add_strip(frames, "walk_up", "res://art/%s_up_walk.png" % look, _fps(anims, "walk_up", WALK_FPS_BY_DIR.up)):
+		_add_anim(frames, tex, "walk_up", front_back_order.map(func(c): return [3, c]), 8.0)
+	if not _add_strip(frames, "idle_up", "res://art/%s_up_idle.png" % look, _fps(anims, "idle_up", IDLE_SIDE_FPS)):
+		_add_anim(frames, tex, "idle_up", [[3, 0]], 1.0)
+	var side_path := "res://art/%s_side_walk.png" % (look if hero == base else hero)
 	if ResourceLoader.exists(side_path):
-		# Rigged 8-frame side cycle (contact, down, passing, up, contact, down, passing, up)
+		# Skinned 12-frame side cycle from tools/walk_skin.py (frame 0 = near heel strike)
 		var side_tex: Texture2D = load(side_path)
-		_add_anim(frames, side_tex, "walk_side", [[0, 0], [0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [0, 6], [0, 7]], 14.0)
-		_add_anim(frames, side_tex, "idle_side", [[0, 2]], 1.0)   # passing pose: feet together
+		var count := int(side_tex.get_width() / CELL.x)
+		var cells := []
+		for c in count:
+			cells.append([0, c])
+		var side_fps: float = SIDE_WALK_FPS_BY_HERO.get(hero, SIDE_WALK_FPS)
+		if hero == base:
+			side_fps = _fps(anims, "walk_side", side_fps)
+		_add_anim(frames, side_tex, "walk_side", cells, side_fps)
+		var idle_path := "res://art/%s_side_idle.png" % (look if hero == base else hero)
+		if ResourceLoader.exists(idle_path):
+			# Breathing idle loop (tools/sprixen/build_idle_strip.py); a single-cell file still works
+			var idle_tex: Texture2D = load(idle_path)
+			var idle_count := int(idle_tex.get_width() / CELL.x)
+			var idle_cells := []
+			for c in idle_count:
+				idle_cells.append([0, c])
+			_add_anim(frames, idle_tex, "idle_side", idle_cells, _fps(anims, "idle_side", IDLE_SIDE_FPS) if idle_count > 1 else 1.0)
+		else:
+			_add_anim(frames, side_tex, "idle_side", [[0, count / 3]], 1.0)
 	else:
 		_add_anim(frames, tex, "walk_side", [[1, 0], [1, 1], [1, 2], [1, 3]], 8.0)
 		_add_anim(frames, tex, "idle_side", [[1, 0]], 1.0)
 	sprite.sprite_frames = frames
+	_setup_recolor(anims)
 	sprite.play("idle_down")
 
 
+## Skin / hair customization: shaders/recolor.gdshader with the mask strip of the current animation.
+func _setup_recolor(anims: Dictionary) -> void:
+	_recolor = ShaderMaterial.new()
+	_recolor.shader = load("res://shaders/recolor.gdshader")
+	if anims.has("skin_ref"):
+		var s: Array = anims["skin_ref"]
+		_recolor.set_shader_parameter("skin_ref", Vector3(s[0], s[1], s[2]))
+	if anims.has("hair_ref"):
+		var h: Array = anims["hair_ref"]
+		_recolor.set_shader_parameter("hair_ref", Vector3(h[0], h[1], h[2]))
+	sprite.material = _recolor
+	if not sprite.animation_changed.is_connected(_apply_mask):
+		sprite.animation_changed.connect(_apply_mask)
+	set_appearance(GameState.skin_color, GameState.hair_color)
+
+
+## skin / hair: a Color, or null to keep the colours as drawn.
+func set_appearance(skin, hair) -> void:
+	if _recolor == null:
+		return
+	_recolor.set_shader_parameter("recolor_skin", skin is Color)
+	_recolor.set_shader_parameter("recolor_hair", hair is Color)
+	if skin is Color:
+		_recolor.set_shader_parameter("skin_color", Vector3(skin.r, skin.g, skin.b))
+	if hair is Color:
+		_recolor.set_shader_parameter("hair_color", Vector3(hair.r, hair.g, hair.b))
+	_apply_mask()
+
+
+func _apply_mask() -> void:
+	if _recolor == null:
+		return
+	var m = _masks.get(String(sprite.animation))
+	_recolor.set_shader_parameter("has_mask", m != null)
+	if m != null:
+		_recolor.set_shader_parameter("mask_tex", m)
+
+
+func _load_manifest(hero_name: String) -> Dictionary:
+	var path := "res://art/%s_anims.json" % hero_name
+	if not FileAccess.file_exists(path):
+		return {}
+	var data = JSON.parse_string(FileAccess.get_file_as_string(path))
+	return data if data is Dictionary else {}
+
+
+func _fps(anims: Dictionary, key: String, fallback: float) -> float:
+	if anims.has(key) and anims[key] is Dictionary and anims[key].has("fps"):
+		return float(anims[key]["fps"])
+	return fallback
+
+
+## Adds a one-row strip of CELL-sized frames as a looping animation; false if the file is missing.
+func _add_strip(frames: SpriteFrames, anim: String, path: String, fps: float) -> bool:
+	if not ResourceLoader.exists(path):
+		return false
+	var t: Texture2D = load(path)
+	var cells := []
+	for c in int(t.get_width() / CELL.x):
+		cells.append([0, c])
+	_add_anim(frames, t, anim, cells, fps)
+	return true
+
+
 func _add_anim(frames: SpriteFrames, tex: Texture2D, anim: String, cells: Array, fps: float) -> void:
+	# a strip built by tools/sprixen has a matching <strip>_mask.png for skin/hair recolouring
+	var mask_path := tex.resource_path.replace(".png", "_mask.png")
+	if tex.resource_path.ends_with(".png") and ResourceLoader.exists(mask_path):
+		_masks[anim] = load(mask_path)
+	else:
+		_masks.erase(anim)
 	frames.add_animation(anim)
 	frames.set_animation_speed(anim, fps)
 	frames.set_animation_loop(anim, true)
@@ -130,7 +245,7 @@ func _physics_process(delta: float) -> void:
 
 	match state:
 		"move":
-			velocity = input * SPEED
+			velocity = input * walk_speed
 			if input.length() > 0.1:
 				facing = input.normalized()
 			if controllable and weapon != "" and Input.is_action_just_pressed("attack"):
@@ -221,6 +336,8 @@ func _update_anim() -> void:
 	var anim := ("walk_" if moving or state == "roll" else "idle_") + anim_dir
 	if sprite.animation != anim:
 		sprite.play(anim)
+	# legs keep pace with actual speed (e.g. a half-pushed stick walks slower, not skating)
+	sprite.speed_scale = clampf(velocity.length() / walk_speed, 0.5, 1.5) if moving else 1.0
 
 
 func _draw_fx() -> void:

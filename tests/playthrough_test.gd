@@ -25,7 +25,7 @@ func _initialize() -> void:
 func _run() -> void:
 	await frames(5)
 	var ui = main.ui
-	ui._pick_hero(0 if hero == "arthur" else 1)
+	ui._pick_hero(["arthur", "gwen", "arthur_v2"].find(hero))
 	ui.name_edit.text = "Testy"
 	ui._start()
 	ok("hero chosen", root.get_node("GameState").hero == hero and root.get_node("GameState").hero_name == "Testy")

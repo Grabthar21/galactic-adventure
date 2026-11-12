@@ -1,0 +1,195 @@
+{
+ "name": "arthur_stand",
+ "src": "source_art/side0.png",
+ "joints": {
+  "head": [
+   112,
+   60
+  ],
+  "far_hip": [
+   90,
+   170
+  ],
+  "far_knee": [
+   68,
+   211
+  ],
+  "far_ankle": [
+   58,
+   249
+  ],
+  "near_hip": [
+   110,
+   170
+  ],
+  "near_knee": [
+   124,
+   229
+  ],
+  "near_ankle": [
+   138,
+   256
+  ],
+  "far_shoulder": [
+   121,
+   112
+  ],
+  "far_elbow": [
+   128,
+   147
+  ],
+  "near_shoulder": [
+   79,
+   102
+  ],
+  "near_elbow": [
+   67,
+   145
+  ],
+  "near_hand": [
+   54,
+   188
+  ],
+  "far_hand": [
+   146,
+   182
+  ]
+ },
+ "crotch_x": 99,
+ "crotch_y": 199,
+ "leg_top": 166,
+ "band_x": [
+  40,
+  132
+ ],
+ "far_arm_poly": [
+  [
+   110,
+   112
+  ],
+  [
+   136,
+   108
+  ],
+  [
+   148,
+   138
+  ],
+  [
+   168,
+   148
+  ],
+  [
+   168,
+   200
+  ],
+  [
+   124,
+   200
+  ],
+  [
+   118,
+   165
+  ],
+  [
+   110,
+   140
+  ]
+ ],
+ "near_arm_poly": [
+  [
+   30,
+   96
+  ],
+  [
+   80,
+   96
+  ],
+  [
+   80,
+   150
+  ],
+  [
+   76,
+   160
+  ],
+  [
+   74,
+   200
+  ],
+  [
+   30,
+   200
+  ]
+ ],
+ "torso_poly": [
+  [
+   80,
+   96
+  ],
+  [
+   126,
+   96
+  ],
+  [
+   126,
+   160
+  ],
+  [
+   80,
+   160
+  ]
+ ],
+ "_note": "In this pose the LEFT (rear) arm is the near arm: it overlaps the vest. The right arm is the far arm, partly hidden behind the torso.",
+ "torso_back_fill": [
+  [
+   81,
+   96
+  ],
+  [
+   74,
+   100
+  ],
+  [
+   69,
+   114
+  ],
+  [
+   68,
+   135
+  ],
+  [
+   71,
+   152
+  ],
+  [
+   81,
+   160
+  ]
+ ],
+ "far_foot_raise": 1.0,
+ "reference": "ref_walk_tracking.json",
+ "ref_arm_len": 7.4,
+ "motion": {
+  "frames": 1,
+  "stride": 0.0,
+  "lift": 0.0,
+  "bob": 0.0,
+  "arm_fwd_scale": 0.0,
+  "stance_fwd": 4.0,
+  "reach_back": 0.97,
+  "reach_fwd": 0.97
+ },
+ "sole_keys": [
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0
+ ]
+}
