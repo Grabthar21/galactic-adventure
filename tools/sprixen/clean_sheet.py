@@ -33,19 +33,27 @@ def restore_collar(f):
     if not notch.any():
         return f
     out = f.copy()
-    # only real collar: pale pixels Sprixen kept (some alpha), in pieces of a useful size that touch
-    # the opaque white shirt. Empty background between nape and shoulder, and pale specks at the
-    # hair edge, are left alone (painting those added pixels that were never part of the drawing).
+    # The approved drawing shows the white collar behind the neck in every pose. Sprixen sometimes
+    # erased it (the background shows through there in some frames and not others, so it flashes).
+    # Rebuild it the same way in every frame: the notch between nape and shoulder is filled up to
+    # the collar's height above the shirt, in the shirt's own white (never the background colour);
+    # greyish/lavender collar pixels that Sprixen blended with its backdrop get the same white.
     rgb = f[:, :, :3]
     shirt = body & (rgb.min(2) > 175) & (rgb[:, :, 0] >= rgb[:, :, 2] - 4)
-    pale = notch & (a >= 15) & (rgb.min(2) > 150)
-    pale = ndimage.binary_opening(pale, structure=np.ones((3, 3)))   # solid patches only, no wisps
-    lab, nl = ndimage.label(pale, structure=np.ones((3, 3)))
-    near_shirt = ndimage.binary_dilation(shirt, iterations=1)
-    for k in range(1, nl + 1):
-        comp = lab == k
-        if comp.sum() >= 6 and (comp & near_shirt).any():
-            out[comp, 3] = 255
+    if not shirt.any():
+        return f
+    dist_shirt, (iy, ix) = ndimage.distance_transform_edt(~shirt, return_indices=True)
+    collar_h = 0.035 * h                                   # ~ collar height in the approved drawing
+    fill = notch & (dist_shirt <= collar_h)
+    sat = rgb.max(2) - rgb.min(2)
+    dirty = body & band & (dist_shirt <= 3) & ~shirt & (rgb.min(2) > 120) & (sat < 45) \
+        & (rgb[:, :, 2] >= rgb[:, :, 0] - 6) & ndimage.binary_dilation(notch | fill, iterations=3)
+    tgt = fill | dirty
+    if tgt.any():
+        col = rgb[iy, ix]                                  # nearest shirt colour
+        col = np.stack([ndimage.gaussian_filter(col[..., c], 1.2) for c in range(3)], -1)
+        out[tgt, :3] = col[tgt] * 0.96                     # a touch of collar shade
+        out[tgt, 3] = 255
     return out
 
 

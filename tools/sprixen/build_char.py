@@ -161,6 +161,8 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
         strip = os.path.join(ART, f"{prefix}_{direction}_walk.png")
         run("build_walk_strip.py", lk, strip, H, fps,
             env={"BASE_H": base_h, **({} if head_lock else {"PLACE_FROM": geo3})})
+        if not head_lock and direction == "side":
+            pass   # the near-glove size is matched after the idle strip exists (below)
         run("masks.py", strip, strip.replace(".png", "_mask.png"), head_px)   # skin/hair for recolouring
         manifest[f"walk_{direction}"] = {"frames": frames, "fps": fps}
         print(f"walk_{direction}: {out}")
@@ -173,6 +175,10 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
         run("build_idle_strip.py", br, istrip, H, env={"BASE_H": base_h})
         run("masks.py", istrip, istrip.replace(".png", "_mask.png"), head_px)
         manifest[f"idle_{direction}"] = {"frames": n_idle, "fps": idle.get("fps", 12)}
+        if not head_lock and direction == "side":
+            # near hand: one size in every walk frame, measured from the approved standing drawing
+            print(run("match_glove.py", strip, istrip).stdout.strip())
+            run("masks.py", strip, strip.replace(".png", "_mask.png"), head_px)
         if direction == "side" and extra_idles:
             for x in cfg.get("extra_idles", []):
                 xo = os.path.join(ART, x["out"])
