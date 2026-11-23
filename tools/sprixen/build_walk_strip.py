@@ -33,8 +33,12 @@ def main():
     n_all = sheet.width // SRC
     order = [int(x) for x in sys.argv[5].split(",")] if len(sys.argv) > 5 else list(range(n_all))
     frames = [sheet.crop((i * SRC, 0, (i + 1) * SRC, SRC)) for i in order]
+    import os
+    pf = os.environ.get("PLACE_FROM")      # same geometry, measured before a colour-only fix
+    psheet = Image.open(pf).convert("RGBA") if pf else sheet
+    pframes = [psheet.crop((i * SRC, 0, (i + 1) * SRC, SRC)) for i in order]
     info = []
-    for f in frames:
+    for f in pframes:
         a = alpha(f)
         ys, xs = np.where(a)
         top, bot = ys.min(), ys.max()
@@ -66,7 +70,7 @@ def main():
         clipped = Image.new("RGBA", cell.size, (0, 0, 0, 0))
         clipped.paste(cell, (0, 0), mask)
         strip.alpha_composite(clipped)
-        a = alpha(f)
+        a = alpha(pframes[i])
         ys, xs = np.where(a)
         low = xs[ys > d["bot"] - 4]
         foot_x.append((low.min() - d["torso"]) * s)   # toe-side unused; heel edge

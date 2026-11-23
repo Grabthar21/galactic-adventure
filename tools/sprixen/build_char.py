@@ -106,7 +106,7 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
             cb = clean_body(b)
         else:
             from clean_sheet import clean_soft   # soft outline to match the Sprixen-style walks
-            cb = clean_soft(b)
+            cb = clean_soft(b, collar=False)   # the standing drawings are approved as they are
         Image.fromarray(np.clip(cb, 0, 255).astype(np.uint8)).save(clean)
         views[v] = dict(base=base, clean=clean, prof=prof)
     ref = views[cfg.get("skin_reference", "side")]["clean"]
@@ -137,16 +137,29 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
             run("lock_head.py", sc, d["base"], lk, 2, 0, prof,
                 env={"LOCATE_BASE": loc_base} if locate_bases else None)
         else:   # Sprixen's own head (turns with the body, hair moves); only the matte is cleaned
+            # geometry (head size, bob, leg length, placement) is measured on the sheet WITHOUT the
+            # collar repair, so colour/outline fixes never move anything
+            geo = os.path.join(w, f"{direction}_geom.png")
+            run("clean_sheet.py", sc, geo, "--no-collar")
             run("clean_sheet.py", sc, lk)
-            print(run("match_head.py", lk, d["base"], lk, prof).stdout.strip())   # approved head size
-        print(run("match_legs.py", lk, d["base"], lk, prof).stdout.strip())   # never taller walking than standing
+            geo2 = geo.replace(".png", "_h.png")
+            print(run("match_head.py", geo, d["base"], geo2, prof).stdout.strip())   # approved head size
+            run("match_head.py", lk, d["base"], lk, prof, env={"GEOM_SHEET": geo})
+            geo3 = geo.replace(".png", "_l.png")
+            run("match_legs.py", geo2, d["base"], geo3, prof)
+            run("match_legs.py", lk, d["base"], lk, prof, env={"GEOM_SHEET": geo2})
+        if head_lock:
+            print(run("match_legs.py", lk, d["base"], lk, prof).stdout.strip())   # never taller walking than standing
         if cfg.get("fix_gloves"):
             run("fix_gloves.py", lk, lk)
         if d["clean"] != ref:
             run("skin_match.py", ref, lk, lk)
+        if not head_lock:   # Sprixen-style: give every frame the approved drawing's outline
+            print(run("ink_outline.py", lk, d["base"], lk).stdout.strip())
         fps = round(frames / cycle, 2)
         strip = os.path.join(ART, f"{prefix}_{direction}_walk.png")
-        run("build_walk_strip.py", lk, strip, H, fps, env={"BASE_H": base_h})
+        run("build_walk_strip.py", lk, strip, H, fps,
+            env={"BASE_H": base_h, **({} if head_lock else {"PLACE_FROM": geo3})})
         run("masks.py", strip, strip.replace(".png", "_mask.png"), head_px)   # skin/hair for recolouring
         manifest[f"walk_{direction}"] = {"frames": frames, "fps": fps}
         print(f"walk_{direction}: {out}")

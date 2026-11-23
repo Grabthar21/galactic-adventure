@@ -37,8 +37,11 @@ def main():
     tm = gray(base[t0:t1])
     by = np.where(base[:, :, 3].max(1) > 40)[0]
     base_h = by.max() - t0                       # head-paste top -> feet, approved drawing
+    import os
+    gp = os.environ.get("GEOM_SHEET")
+    geom = np.array(Image.open(gp).convert("RGBA")).astype(np.float32) if gp else sheet
     hs, tops, bots = [], [], []
-    for f in frames:
+    for f in [geom[:, i * SRC:(i + 1) * SRC] for i in range(n)]:
         r = cv2.matchTemplate(gray(f), tm, cv2.TM_CCOEFF_NORMED)
         _, _, _, loc = cv2.minMaxLoc(r)
         ys = np.where(f[:, :, 3].max(1) > 40)[0]

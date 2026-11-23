@@ -34,12 +34,18 @@ def main():
     prof = json.loads(sys.argv[4])
     n = sheet.shape[1] // SRC
     frames = [sheet[:, i * SRC:(i + 1) * SRC] for i in range(n)]
+    # GEOM_SHEET: measure on another sheet with the same drawing geometry (e.g. before a colour-only
+    # fix), so a colour fix never moves anything
+    import os
+    gp = os.environ.get("GEOM_SHEET")
+    geom = np.array(Image.open(gp).convert("RGBA")).astype(np.float32) if gp else sheet
+    gframes = [geom[:, i * SRC:(i + 1) * SRC] for i in range(n)]
     t0, t1 = prof["HEAD_TOP"], prof["CHIN_CUT"]
     head = base[t0:t1]
     cols = np.where(head[:, :, 3].max(0) > 40)[0]
     head = head[:, cols.min():cols.max() + 1]
     tm0 = gray(head)
-    imgs = [gray(f) for f in frames]
+    imgs = [gray(f) for f in gframes]
     best = None
     for k in np.arange(0.85, 1.151, 0.005):
         t = cv2.resize(tm0, None, fx=k, fy=k, interpolation=cv2.INTER_AREA)
@@ -88,7 +94,7 @@ def main():
             sc = 1 + (f - 1) * w
             sx = ax + (xx - ax) / sc
             sy = ay + (yy - ay) / sc
-        ys_a = np.where(fr[:, :, 3].max(1) > 40)[0]
+        ys_a = np.where(gframes[i][:, :, 3].max(1) > 40)[0]
         top, bot = ys_a.min(), ys_a.max()
         chest, hip = top + 0.36 * (bot - top), top + 0.52 * (bot - top)
         wv = np.clip((hip - yy) / (hip - chest), 0, 1)

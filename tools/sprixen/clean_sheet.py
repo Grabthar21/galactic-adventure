@@ -9,10 +9,47 @@ from scipy import ndimage
 from lock_head import clean_body, SRC
 
 
-def clean_soft(f):
+def restore_collar(f):
+    """Sprixen's background removal sometimes eats part of the white collar between neck and
+    shoulder: those pixels keep their real colour but come out half see-through, so the clean-up
+    cut a notch there and the notch was patched with mismatched colours. Pixels in that band that
+    sit in a concave notch of the body (inside a small closing of the shape) are made opaque again:
+    their own colour where Sprixen kept one, otherwise painted in smoothly from the neighbours."""
+    import cv2
+    a = f[:, :, 3]
+    body = a >= 60
+    ys = np.where(body.any(1))[0]
+    if not len(ys):
+        return f
+    top, bot = ys.min(), ys.max()
+    h = bot - top
+    band = np.zeros_like(body)
+    band[top + int(0.20 * h):top + int(0.42 * h)] = True        # chin to chest
+    disk = np.ones((9, 9), bool)
+    yy, xx = np.mgrid[-4:5, -4:5]
+    disk = (yy * yy + xx * xx) <= 16
+    closed = ndimage.binary_closing(np.pad(body, 6), structure=disk)[6:-6, 6:-6]
+    notch = closed & ~body & band
+    if not notch.any():
+        return f
+    out = f.copy()
+    keep = notch & (a >= 15) & (f[:, :, :3].min(2) > 150)      # pale collar colour survived
+    out[keep, 3] = 255
+    paint = notch & ~keep
+    if paint.any():
+        rgb = np.clip(out[:, :, :3], 0, 255).astype(np.uint8)
+        filled = cv2.inpaint(rgb, paint.astype(np.uint8) * 255, 3, cv2.INPAINT_TELEA)
+        out[paint, :3] = filled[paint]
+        out[paint, 3] = 255
+    return out
+
+
+def clean_soft(f, collar=True):
     """clean_body, but the outline keeps Sprixen's soft (anti-aliased) edge instead of a hard
     on/off one, so the downscaled sprite has smooth outlines; small enclosed gaps in the head
     and chest (e.g. the notch Sprixen leaves between nape and collar) are closed."""
+    if collar:
+        f = restore_collar(f)
     c = clean_body(f)
     solid = c[:, :, 3] > 0
     # backdrop seen through narrow gaps (between the legs, arm and body) comes out light grey-blue;
@@ -61,5 +98,6 @@ if __name__ == "__main__":
     sheet = np.array(Image.open(sys.argv[1]).convert("RGBA")).astype(np.float32)
     out = sheet.copy()
     for i in range(sheet.shape[1] // SRC):
-        out[:, i * SRC:(i + 1) * SRC] = clean_soft(sheet[:, i * SRC:(i + 1) * SRC])
+        out[:, i * SRC:(i + 1) * SRC] = clean_soft(sheet[:, i * SRC:(i + 1) * SRC],
+                                                   collar="--no-collar" not in sys.argv)
     Image.fromarray(np.clip(out, 0, 255).astype(np.uint8)).save(sys.argv[2])
