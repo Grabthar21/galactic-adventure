@@ -11,9 +11,10 @@ Writes art/<name>_<side|down|up>_<walk|idle>.png (98x148 cells), a matching *_ma
 (R = skin, G = hair; used by shaders/recolor.gdshader for player customization) and art/<name>_anims.json
 (frame counts + fps, read by scripts/player.gd). Exit code 1 if any QA check fails.
 
-Per walk:  find_loop -> match_scale -> lock_head (+ matte clean) -> fix_gloves -> skin_match
+Per walk:  find_loop -> match_scale -> lock_head (+ matte clean) -> match_legs -> fix_gloves -> skin_match
            -> build_walk_strip (downscale, defringe, pinholes, specks, outline, feet on ground)
 Per idle:  clean base -> skin_match -> breathe -> build_idle_strip
+Then:     stamp_head (idle frame 0's head on every walk/idle frame, whole-pixel positions)
 QA:        qa_strip.py per strip, qa_cross.py across walk/idle of each direction
 """
 import json
@@ -119,6 +120,7 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
         lk = os.path.join(w, f"{direction}_locked.png")
         run("lock_head.py", sc, d["base"], lk, 2, 0, prof,
             env={"LOCATE_BASE": loc_base} if locate_bases else None)
+        print(run("match_legs.py", lk, d["base"], lk, prof).stdout.strip())   # never taller walking than standing
         if cfg.get("fix_gloves"):
             run("fix_gloves.py", lk, lk)
         if d["clean"] != ref:
@@ -144,6 +146,19 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
                 run("build_idle_strip.py", br, xo, x["height"], env={"BASE_H": base_h})
                 run("masks.py", xo, xo.replace(".png", "_mask.png"),
                     round(head_px * x["height"] / H))
+
+    # one face for every frame: re-stamp idle frame 0's head (whole-pixel positions) on all walk
+    # and idle frames of each direction, then rebuild the recolour masks
+    for direction in ("side", "down", "up"):
+        v = DIR_VIEW[direction]
+        dp = views[v]["prof"]
+        head_px = round((dp["CHIN_CUT"] - dp["HEAD_TOP"]) / dp["HEIGHT"] * H)
+        ref_idle = os.path.join(w, f"{direction}_idle_ref.png")
+        shutil.copy(os.path.join(ART, f"{prefix}_{direction}_idle.png"), ref_idle)
+        for kind in ("walk", "idle"):
+            sp = os.path.join(ART, f"{prefix}_{direction}_{kind}.png")
+            print(run("stamp_head.py", sp, ref_idle, head_px, 0).stdout.strip())
+            run("masks.py", sp, sp.replace(".png", "_mask.png"), head_px)
 
     # reference colours the recolour shader converts FROM (median of solid skin / hair pixels)
     st = np.array(Image.open(os.path.join(ART, f"{prefix}_side_walk.png")).convert("RGBA")).astype(float)

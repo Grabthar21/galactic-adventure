@@ -37,6 +37,10 @@ and checks every frame. Arthur (`chars/arthur/`) is the worked example.
   (`match_scale.py`) -> paste the approved head on every frame + clean Sprixen's background
   removal (`lock_head.py`, head rows found by `head_rows.py`) -> repaint bare fingers
   (`fix_gloves.py`) -> match skin to the side view (`skin_match.py`) -> build strip.
+- **Legs:** `match_legs.py` - a walk may never stand taller than the standing drawing; if Sprixen drew the legs
+  longer (Arthur's back walk was ~2.5% taller), the legs are shortened by whole pixels, head/torso untouched.
+- **One face:** `stamp_head.py` - after the strips are built, idle frame 0's head is re-stamped on every walk and
+  idle frame at whole-pixel positions (no jumps >1px), so the face is pixel-identical in every frame.
 - **Idles:** the approved drawing breathing gently (`breathe.py`); Sprixen idles are not used.
 - **Strip build:** premultiplied area downscale, defringe, pinhole fill, speck removal,
   outline re-ink, feet snapped to the ground (`resample.py`); one scale per direction from
