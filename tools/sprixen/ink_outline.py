@@ -32,14 +32,16 @@ def line_colour(base):
 
 def ink(f, col, col_l):
     a = f[:, :, 3]
-    solid = a > 128
+    # the line follows a smoothed version of the silhouette, so ragged half see-through edge
+    # pixels (hair tips, nape) don't turn into a row of dark dashes
+    solid = ndimage.gaussian_filter(a / 255.0, 1.0) > 0.5
     d = ndimage.distance_transform_edt(solid)
     w = np.clip((FADE - d) / (FADE - FULL), 0, 1)
     w = w * w * (3 - 2 * w)
     w[~(a > 0)] = 0
     # semi-transparent rim pixels (outside the solid shape) take the line colour fully
     rim = (a > 0) & ~solid
-    w[rim] = 1.0
+    w[rim] = np.clip(a[rim] / 255.0 * 1.5, 0, 1)
     rgb = f[:, :, :3]
     lum = rgb.mean(2)
     need = np.clip((lum - col_l) / 60.0, 0, 1)          # already as dark as a line -> unchanged

@@ -128,10 +128,137 @@ def clean_soft(f, collar=True, aa=True):
     c[:, :, 3] = newA * 255
     return c
 
+def clean_gentle(f):
+    """Sprixen-style clean-up that keeps Sprixen's own outline shape and anti-aliasing.
+    The earlier clean-up decided pixel by pixel whether to keep an edge pixel, and peeled light
+    grey pixels off the edge; on the white sleeves and collar (whose shading IS light grey) that
+    carved dents and slivers that changed from frame to frame. Here the shape is Sprixen's alpha:
+      - faint leftovers of the old backdrop (alpha < 60 and cool/light) are dropped,
+      - edge pixels keep their alpha but take the colour of the nearest solid pixel, so no backdrop
+        colour (white/lavender) is blended into the edge,
+      - tiny enclosed holes (<= 12 px) are filled; the far-arm see-through is made solid.
+    """
+    a = f[:, :, 3].copy()
+    rgb = f[:, :, :3]
+    cool = (rgb.min(2) > 140) & (rgb[:, :, 0] < np.maximum(rgb[:, :, 1], rgb[:, :, 2]) - 2)
+    a[(a < 60) & cool] = 0
+    a[a < 8] = 0
+    solid = a >= 200
+    holes, n = ndimage.label(ndimage.binary_fill_holes(solid) & ~solid)
+    for k in range(1, n + 1):
+        hm = holes == k
+        if hm.sum() <= 12:
+            solid |= hm
+            a[hm] = 255
+    # enclosed gaps in the head/chest (the collar Sprixen made see-through between nape and vest):
+    # painted in smoothly from their surroundings, so the background never flashes through.
+    ys = np.where(solid.any(1))[0]
+    if len(ys):
+        y0, y1 = ys.min(), ys.max()
+        holes, n = ndimage.label(ndimage.binary_fill_holes(a >= 60) & ~(a >= 200))
+        for k in range(1, n + 1):
+            hm = holes == k
+            if hm.sum() <= 220 and np.where(hm)[0].mean() < y0 + 0.45 * (y1 - y0):
+                import cv2
+                yy, xx = np.where(hm)
+                ya, yb = max(yy.min() - 6, 0), yy.max() + 7
+                xa, xb = max(xx.min() - 6, 0), xx.max() + 7
+                known = (a[ya:yb, xa:xb] >= 200) & ~hm[ya:yb, xa:xb]
+                # a see-through collar is filled in the collar's own white (as in the frames where
+                # Sprixen kept it), not a blend with the hair and vest around it
+                lightk = known & (rgb[ya:yb, xa:xb].min(2) > 170)
+                ring = ndimage.binary_dilation(hm[ya:yb, xa:xb], iterations=2) & known
+                # the only thing that sits in this gap in the approved drawing is the white collar
+                if lightk.sum() >= 6:
+                    known = lightk
+                _, (iy, ix) = ndimage.distance_transform_edt(~known, return_indices=True)
+                loc = rgb[ya:yb, xa:xb][iy, ix]            # nearest solid colour everywhere
+                rgb8 = np.clip(loc, 0, 255).astype(np.uint8)
+                painted = cv2.inpaint(rgb8, hm[ya:yb, xa:xb].astype(np.uint8) * 255, 3, cv2.INPAINT_TELEA)
+                rgb = rgb.copy()
+                sub = rgb[ya:yb, xa:xb]
+                sub[hm[ya:yb, xa:xb]] = painted[hm[ya:yb, xa:xb]]
+                a[hm] = 255
+                solid |= hm
+    # inside the body (2+ px from the outside) everything is solid: the far arm is see-through in Sprixen
+    inner = ndimage.binary_erosion(a > 60, iterations=2)
+    a[inner] = 255
+    # pale bluish-white patches next to the outside are Sprixen's old backdrop showing in the gaps
+    # between arm and body (the shirt is a warm white, never bluish): cleared
+    outside = a == 0
+    coolw = (a > 0) & (rgb.min(2) > 150) & (rgb[:, :, 2] >= rgb[:, :, 0] + 3)
+    lab, nl = ndimage.label(coolw)
+    if nl:
+        near_out = ndimage.binary_dilation(outside, iterations=3)
+        solid_wo = (a >= 200) & ~coolw
+        gaps = ndimage.binary_fill_holes(solid_wo) & ~solid_wo        # enclosed gaps (arm/body, legs)
+        ysb = np.where((a >= 200).any(1))[0]
+        head_end = ysb.min() + int(0.30 * (ysb.max() - ysb.min())) if len(ysb) else 0
+        for k in range(1, nl + 1):
+            comp = lab == k
+            if np.where(comp)[0].mean() < head_end:
+                continue                                              # eyes etc.
+            if (comp & near_out).any() or (comp & gaps).sum() >= 0.6 * comp.sum():
+                a[comp] = 0
+    # thin wisps on the outline (1-2 px strands of half see-through hair or collar behind the neck):
+    # they come and go between frames and turn into dark hooks once the outline is inked. Anything
+    # an opening with a 3x3 square removes, in pieces under 30 px, is dropped.
+    body = a > 60
+    opened = ndimage.binary_opening(body, structure=np.ones((3, 3)))
+    thin = body & ~opened
+    lab, nl = ndimage.label(thin)
+    if nl:
+        sizes = ndimage.sum(thin, lab, range(1, nl + 1))
+        drop = np.isin(lab, 1 + np.where(sizes < 30)[0])
+        a[drop] = 0
+    # small light pockets caught between hair tips (where the hair meets the collar): once inked
+    # they read as little loops. Pockets of <= 14 px whose border is mostly hair take the hair colour.
+    body = a > 60
+    hair = body & (rgb[:, :, 0] > rgb[:, :, 2] + 25) & (rgb.mean(2) < 150) & (rgb[:, :, 0] < 190)
+    lightp = body & (rgb.min(2) > 140)
+    lab, nl = ndimage.label(lightp)
+    if nl:
+        sizes = ndimage.sum(lightp, lab, range(1, nl + 1))
+        _, (hy, hx) = ndimage.distance_transform_edt(~hair, return_indices=True)
+        rgb = rgb.copy()
+        for k in np.where(sizes <= 40)[0] + 1:
+            comp = lab == k
+            ring = ndimage.binary_dilation(comp, iterations=2) & ~comp
+            hair_or_out = (ring & (hair | ~body)).sum()
+            if ring.sum() and (ring & hair).sum() >= 0.25 * ring.sum() and hair_or_out >= 0.7 * ring.sum():
+                rgb[comp] = rgb[hy[comp], hx[comp]]
+    # pixels Sprixen left half see-through inside the body (mostly the white collar behind the neck)
+    # carry a muddy blend with its backdrop; greyish ones next to the shirt take the shirt's white,
+    # so the collar looks the same in every frame
+    a0 = f[:, :, 3]
+    semi = (a0 >= 20) & (a0 < 230) & (a >= 245)
+    sat = rgb.max(2) - rgb.min(2)
+    lightop = (a0 >= 230) & (rgb.min(2) > 170)
+    if semi.any() and lightop.any():
+        dl, (ly, lx) = ndimage.distance_transform_edt(~lightop, return_indices=True)
+        ysb = np.where(a.max(1) >= 200)[0]
+        collar_band = np.zeros_like(semi)
+        if len(ysb):
+            hh = ysb.max() - ysb.min()
+            collar_band[ysb.min() + int(.15 * hh):ysb.min() + int(.40 * hh)] = True
+        fix = semi & (sat < 45) & (dl <= 12) & collar_band
+        rgb = rgb.copy()
+        rgb[fix] = rgb[ly[fix], lx[fix]]
+    _, (iy, ix) = ndimage.distance_transform_edt(~(a >= 245), return_indices=True)
+    out = f.copy()
+    out[:, :, :3] = rgb
+    edge = (a > 0) & (a < 245)
+    out[edge, :3] = rgb[iy[edge], ix[edge]]
+    out[:, :, 3] = a
+    out[a == 0, :3] = 0
+    return out
+
+
 if __name__ == "__main__":
     sheet = np.array(Image.open(sys.argv[1]).convert("RGBA")).astype(np.float32)
     out = sheet.copy()
     for i in range(sheet.shape[1] // SRC):
-        out[:, i * SRC:(i + 1) * SRC] = clean_soft(sheet[:, i * SRC:(i + 1) * SRC],
-                                                   collar="--no-collar" not in sys.argv)
+        fr = sheet[:, i * SRC:(i + 1) * SRC]
+        out[:, i * SRC:(i + 1) * SRC] = clean_gentle(fr) if "--gentle" in sys.argv else \
+            clean_soft(fr, collar="--no-collar" not in sys.argv)
     Image.fromarray(np.clip(out, 0, 255).astype(np.uint8)).save(sys.argv[2])

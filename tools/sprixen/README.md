@@ -39,6 +39,13 @@ and checks every frame. Arthur (`chars/arthur/`) is the worked example.
 - Check with the real renderer: `xvfb-run -a godot --rendering-driver opengl3 --path . -s tests/render_appearance.gd`
   (also `render_title.gd`, `render_ingame.gd`) -> screenshots in /tmp.
 
+## Shape QA for the Sprixen-style look (`qa_shape.py`, added 23 Nov 2026)
+Run by the build on every walk; fails on: one-frame blinks of the outline or of the shirt white in the
+upper body (a collar flashing, a sleeve edge vanishing), one-frame dents in the outline, a collar behind the
+neck that differs from the rest of the loop, thin light slivers on the head/neck edge, and pale bluish
+backdrop patches. `deflicker.py` repairs one-frame blinks/dents before QA; `clean_sheet.py --gentle` keeps
+Sprixen's own edge shape (no keep-or-drop pixel carving).
+
 ## Output
 `art/<name>_<side|down|up>_<walk|idle>.png` (98x148 cells, feet on row 147) and
 `art/<name>_anims.json` (frames + fps). `scripts/player.gd` loads them by name automatically

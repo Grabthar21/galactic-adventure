@@ -140,8 +140,8 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
             # geometry (head size, bob, leg length, placement) is measured on the sheet WITHOUT the
             # collar repair, so colour/outline fixes never move anything
             geo = os.path.join(w, f"{direction}_geom.png")
-            run("clean_sheet.py", sc, geo, "--no-collar")
-            run("clean_sheet.py", sc, lk)
+            run("clean_sheet.py", sc, geo, "--gentle")
+            run("clean_sheet.py", sc, lk, "--gentle")
             geo2 = geo.replace(".png", "_h.png")
             print(run("match_head.py", geo, d["base"], geo2, prof).stdout.strip())   # approved head size
             run("match_head.py", lk, d["base"], lk, prof, env={"GEOM_SHEET": geo})
@@ -175,9 +175,13 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
         run("build_idle_strip.py", br, istrip, H, env={"BASE_H": base_h})
         run("masks.py", istrip, istrip.replace(".png", "_mask.png"), head_px)
         manifest[f"idle_{direction}"] = {"frames": n_idle, "fps": idle.get("fps", 12)}
-        if not head_lock and direction == "side":
-            # near hand: one size in every walk frame, measured from the approved standing drawing
-            print(run("match_glove.py", strip, istrip).stdout.strip())
+        if not head_lock:
+            if direction == "side":
+                # near hand: one size in every walk frame, measured from the approved standing drawing
+                print(run("match_glove.py", strip, istrip).stdout.strip())
+            # one-frame blinks / dents in the upper body (what qa_shape.py checks), two passes
+            for _ in range(3):
+                print(run("deflicker.py", strip).stdout.strip())
             run("masks.py", strip, strip.replace(".png", "_mask.png"), head_px)
         if direction == "side" and extra_idles:
             for x in cfg.get("extra_idles", []):
@@ -220,6 +224,14 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
         for kind in ("walk", "idle"):
             r = run("qa_strip.py", os.path.join(ART, f"{prefix}_{direction}_{kind}.png"),
                     f"{prefix}_{direction}_{kind}", round(H * K), kind)
+            for line in r.stdout.splitlines():
+                if line.startswith("==") or "FAIL" in line or "RESULT" in line:
+                    print(line)
+            ok &= r.returncode == 0
+    if not cfg.get("style", {}).get("head_lock", True):
+        for direction in ("side", "down", "up"):
+            r = run("qa_shape.py", os.path.join(ART, f"{prefix}_{direction}_walk.png"),
+                    os.path.join(ART, f"{prefix}_{direction}_idle.png"), f"{prefix}_{direction}_walk")
             for line in r.stdout.splitlines():
                 if line.startswith("==") or "FAIL" in line or "RESULT" in line:
                     print(line)
