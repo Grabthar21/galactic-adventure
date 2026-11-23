@@ -106,7 +106,7 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
             cb = clean_body(b)
         else:
             from clean_sheet import clean_soft   # soft outline to match the Sprixen-style walks
-            cb = clean_soft(b, collar=False)   # the standing drawings are approved as they are
+            cb = clean_soft(b, collar=False, aa=False)   # the standing drawings are approved as they are
         Image.fromarray(np.clip(cb, 0, 255).astype(np.uint8)).save(clean)
         views[v] = dict(base=base, clean=clean, prof=prof)
     ref = views[cfg.get("skin_reference", "side")]["clean"]
@@ -155,7 +155,8 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
         if d["clean"] != ref:
             run("skin_match.py", ref, lk, lk)
         if not head_lock:   # Sprixen-style: give every frame the approved drawing's outline
-            print(run("ink_outline.py", lk, d["base"], lk).stdout.strip())
+            print(run("ink_outline.py", lk, d["base"], lk,
+                      env={"OUTLINE_WEIGHT": str(cfg.get("style", {}).get("outline_weight", 1))}).stdout.strip())
         fps = round(frames / cycle, 2)
         strip = os.path.join(ART, f"{prefix}_{direction}_walk.png")
         run("build_walk_strip.py", lk, strip, H, fps,

@@ -17,7 +17,9 @@ from PIL import Image
 from scipy import ndimage
 
 SRC = 256
-FULL, FADE = 1.6, 3.0       # fully inked up to FULL px from the edge, nothing past FADE px
+import os
+WEIGHT = float(os.environ.get("OUTLINE_WEIGHT", "1"))   # line thickness (config style.outline_weight)
+FULL, FADE = 1.6 * WEIGHT, 3.0 * WEIGHT    # fully inked up to FULL px from the edge, nothing past FADE px
 
 
 def line_colour(base):

@@ -33,18 +33,23 @@ def restore_collar(f):
     if not notch.any():
         return f
     out = f.copy()
-    keep = notch & (a >= 15) & (f[:, :, :3].min(2) > 150)      # pale collar colour survived
-    out[keep, 3] = 255
-    paint = notch & ~keep
-    if paint.any():
-        rgb = np.clip(out[:, :, :3], 0, 255).astype(np.uint8)
-        filled = cv2.inpaint(rgb, paint.astype(np.uint8) * 255, 3, cv2.INPAINT_TELEA)
-        out[paint, :3] = filled[paint]
-        out[paint, 3] = 255
+    # only real collar: pale pixels Sprixen kept (some alpha), in pieces of a useful size that touch
+    # the opaque white shirt. Empty background between nape and shoulder, and pale specks at the
+    # hair edge, are left alone (painting those added pixels that were never part of the drawing).
+    rgb = f[:, :, :3]
+    shirt = body & (rgb.min(2) > 175) & (rgb[:, :, 0] >= rgb[:, :, 2] - 4)
+    pale = notch & (a >= 15) & (rgb.min(2) > 150)
+    pale = ndimage.binary_opening(pale, structure=np.ones((3, 3)))   # solid patches only, no wisps
+    lab, nl = ndimage.label(pale, structure=np.ones((3, 3)))
+    near_shirt = ndimage.binary_dilation(shirt, iterations=1)
+    for k in range(1, nl + 1):
+        comp = lab == k
+        if comp.sum() >= 6 and (comp & near_shirt).any():
+            out[comp, 3] = 255
     return out
 
 
-def clean_soft(f, collar=True):
+def clean_soft(f, collar=True, aa=True):
     """clean_body, but the outline keeps Sprixen's soft (anti-aliased) edge instead of a hard
     on/off one, so the downscaled sprite has smooth outlines; small enclosed gaps in the head
     and chest (e.g. the notch Sprixen leaves between nape and collar) are closed."""
@@ -87,11 +92,32 @@ def clean_soft(f, collar=True):
                 hm = holes == k
                 hy = np.where(hm)[0].mean()
                 if hm.sum() <= 160 and hy < y0 + 0.45 * (y1 - y0):
-                    c[hm, :3] = c[iy[hm], ix[hm], :3]
+                    # paint the gap smoothly from its surroundings (nearest-pixel copying made a
+                    # patchwork of skin/vest/shirt colours in the collar)
+                    import cv2
+                    rgb8 = np.clip(c[:, :, :3], 0, 255).astype(np.uint8)
+                    painted = cv2.inpaint(rgb8, hm.astype(np.uint8) * 255, 4, cv2.INPAINT_TELEA)
+                    c[hm, :3] = painted[hm]
                     c[hm, 3] = 255
                     solid |= hm
     edge = solid & (ndimage.distance_transform_edt(solid) <= 1.5)
     c[:, :, 3] = np.where(solid, np.where(edge, np.maximum(f[:, :, 3], 0), 255), 0)
+    if not aa:
+        return c
+    # Anti-aliased silhouette. The clean-up keeps a pixel or drops it, which leaves stair-steps
+    # along slanted edges (upper arm, nape). Soften only the alpha of the outermost pixels with a
+    # small blur of the shape: same outline position, no colour change, no new solid pixels.
+    A = c[:, :, 3] / 255.0
+    As = ndimage.gaussian_filter(A, 0.7)
+    band = ndimage.binary_dilation(solid) & ~ndimage.binary_erosion(solid)
+    outer = band & ~solid                       # one pixel outside: faint coverage only
+    newA = A.copy()
+    newA[band & solid] = np.minimum(A[band & solid], np.maximum(As[band & solid] * 1.35, 0.55))
+    newA[outer] = np.clip(As[outer] * 0.6, 0, 0.35)
+    if outer.any():
+        _, (iy, ix) = ndimage.distance_transform_edt(~solid, return_indices=True)
+        c[outer, :3] = c[iy[outer], ix[outer], :3]
+    c[:, :, 3] = newA * 255
     return c
 
 if __name__ == "__main__":
