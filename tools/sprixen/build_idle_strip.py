@@ -14,9 +14,7 @@ from PIL import Image
 from resample import downscale, defringe, snap_feet, fill_pinholes, remove_specks, restore_outline
 
 SRC_CELL = 256
-CELL_W, CELL_H = 98, 148
-FOOT_Y = 147          # bottom row of the feet in the game cells
-CENTER_X = 46         # body centre in the game cells (matches the walk strip)
+from cells import CELL_W, CELL_H, FOOT_Y, CENTER_X, K, REINK
 KEEP = 0.25           # fraction of Sprixen's size change to keep
 
 
@@ -28,7 +26,7 @@ def bbox(a):
 def main():
     sheet = Image.open(sys.argv[1]).convert("RGBA")
     out_path = sys.argv[2]
-    target_h = float(sys.argv[3]) if len(sys.argv) > 3 else 133.0
+    target_h = (float(sys.argv[3]) if len(sys.argv) > 3 else 133.0) * K
     n = sheet.width // SRC_CELL
     frames = [sheet.crop((i * SRC_CELL, 0, (i + 1) * SRC_CELL, SRC_CELL)) for i in range(n)]
     boxes = [bbox(np.array(f)) for f in frames]
@@ -51,10 +49,13 @@ def main():
         t0, t1 = y0 + 75, y0 + 105
         tx = np.where(a[t0:t1] > 40)[1].mean()
         feet_cx = (tx - x0) * s
-        px = round(i * CELL_W + CENTER_X - feet_cx)
+        if i == 0:
+            cx0 = feet_cx           # one x for every frame: breathing must never shift him sideways
+        px = round(i * CELL_W + CENTER_X - cx0 + (x0 - boxes[0][0]) * s)
         py = FOOT_Y + 1 - h2
         strip.alpha_composite(part, (px, py))
-    strip = snap_feet(fill_pinholes(restore_outline(remove_specks(fill_pinholes(defringe(strip))))))
+    strip = remove_specks(fill_pinholes(defringe(strip)))
+    strip = snap_feet(fill_pinholes(restore_outline(strip) if REINK else strip))
     strip.save(out_path)
     print(f"{n} frames, median src height {ref_h:.0f}px, scale {base_scale:.3f} -> {out_path}")
 

@@ -17,3 +17,9 @@ tools/cutout/thigh_side.png
 tools/cutout/lower_*.png
 tools/cutout/leg_joints.json
 tools/cutout/arthur_cut_*
+
+# smooth (Sprixen-style) Arthur strips need mipmaps: keep their import settings
+!art/arthur_*_walk.png.import
+!art/arthur_*_idle.png.import
+!art/arthur_*_walk_mask.png.import
+!art/arthur_*_idle_mask.png.import

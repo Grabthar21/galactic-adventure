@@ -60,7 +60,15 @@ def clean_body(f):
     A = f[:, :, 3]
     rgb = f[:, :, :3]
     solid = A >= ALPHA_CUT
-    solid &= ~((rgb.min(2) > 140) & (rgb[:, :, 0] < np.maximum(rgb[:, :, 1], rgb[:, :, 2]) - 2))
+    # haze sits on the outer edge; cool light pixels inside the body are the white shirt's shading.
+    # Peel cool light pixels from the outside in (up to 4px deep), never punching interior holes.
+    cool = (rgb.min(2) > 140) & (rgb[:, :, 0] < np.maximum(rgb[:, :, 1], rgb[:, :, 2]) - 2)
+    for _ in range(4):
+        edge = solid & ndimage.binary_dilation(~solid)
+        peel = edge & cool
+        if not peel.any():
+            break
+        solid &= ~peel
     interior = solid & (A >= 245)
     _, (iy, ix) = ndimage.distance_transform_edt(~interior, return_indices=True)
     near = rgb[iy, ix]

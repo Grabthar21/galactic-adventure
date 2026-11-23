@@ -47,5 +47,11 @@
       "front": "styles/crop_front.png",
       "back": "styles/crop_back.png"
     }
+  },
+  "style": {
+    "cell_scale": 1.5,
+    "head_lock": false,
+    "reink": false,
+    "notes": "Sprixen-style look (user, 23 Nov 2026): Sprixen's own head turn and hair motion, smooth lines, no pixel look. cell_scale 1.5 = 147x222 cells drawn at half scale with smooth filtering. head_lock true + reink true + cell_scale 1 = the older locked-face pixel look."
   }
 }

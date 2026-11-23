@@ -48,6 +48,11 @@ def main():
     name = sys.argv[1]
     cdir = os.path.join(HERE, "chars", name)
     cfg = json.load(open(os.path.join(cdir, "config.json")))
+    st = cfg.get("style", {})
+    # every step (subprocesses too) reads the cell size and outline mode from the environment
+    os.environ["CELL_SCALE"] = str(st.get("cell_scale", 1))
+    os.environ["REINK"] = "1" if st.get("reink", True) else "0"
+    os.environ["HEAD_LOCK"] = "1" if st.get("head_lock", True) else "0"
     default_bases = {v: os.path.join(cdir, vc["base"]) for v, vc in cfg["views"].items()}
     ok = build_set(name, name, cfg, cdir, default_bases)
     sys.path.insert(0, HERE)
@@ -56,7 +61,10 @@ def main():
     body_h = {v: head_rows(f)["HEIGHT"] for v, f in default_bases.items()}
     # hairstyles: the approved body with each style's head (compose_style.py), built the same way
     styles = {}
-    for style, sc in cfg.get("hairstyles", {}).items():
+    # hairstyles paste a drawn hairstyle onto the walk's head, so they need the locked-head mode;
+    # with Sprixen's own heads each style would need its own Sprixen walks
+    hair = cfg.get("hairstyles", {}) if cfg.get("style", {}).get("head_lock", True) else {}
+    for style, sc in hair.items():
         sdir = tempfile.mkdtemp(prefix=f"{name}_{style}_")
         bases = {}
         for v, vc in cfg["views"].items():
@@ -78,6 +86,8 @@ def main():
 def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None, locate_bases=None):
     """Build walk + idle for side/down/up from the given base drawings; output art/<prefix>_*."""
     H = cfg.get("game_height", 133)
+    K = float(os.environ.get("CELL_SCALE", "1"))
+    head_lock = cfg.get("style", {}).get("head_lock", True)
     cycle = cfg.get("walk_cycle_seconds", 0.8)
     idle = cfg.get("idle", {})
     w = tempfile.mkdtemp(prefix=f"{prefix}_")
@@ -92,7 +102,12 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
         prof = head_rows(base)
         clean = os.path.join(w, f"{v}_clean.png")
         b = np.array(Image.open(base).convert("RGBA")).astype(np.float32)
-        Image.fromarray(np.clip(clean_body(b), 0, 255).astype(np.uint8)).save(clean)
+        if cfg.get("style", {}).get("head_lock", True):
+            cb = clean_body(b)
+        else:
+            from clean_sheet import clean_soft   # soft outline to match the Sprixen-style walks
+            cb = clean_soft(b)
+        Image.fromarray(np.clip(cb, 0, 255).astype(np.uint8)).save(clean)
         views[v] = dict(base=base, clean=clean, prof=prof)
     ref = views[cfg.get("skin_reference", "side")]["clean"]
     for v, d in views.items():
@@ -105,7 +120,7 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
         d = views[v]
         prof = json.dumps({k: d["prof"][k] for k in ("HEAD_TOP", "BROW", "CHIN_CUT", "FACE")})
         base_h = str(body_h[v] if body_h else d["prof"]["HEIGHT"])
-        head_px = round((d["prof"]["CHIN_CUT"] - d["prof"]["HEAD_TOP"]) / d["prof"]["HEIGHT"] * H)
+        head_px = round((d["prof"]["CHIN_CUT"] - d["prof"]["HEAD_TOP"]) / d["prof"]["HEIGHT"] * H * K)
 
         # ---- walk
         raw = os.path.join(cdir, cfg["walks"][direction]["raw"])
@@ -118,8 +133,12 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
         loc_prof = json.dumps({k: head_rows(loc_base)[k] for k in ("HEAD_TOP", "BROW", "CHIN_CUT", "FACE")})
         run("match_scale.py", loop, loc_base, sc, loc_prof)
         lk = os.path.join(w, f"{direction}_locked.png")
-        run("lock_head.py", sc, d["base"], lk, 2, 0, prof,
-            env={"LOCATE_BASE": loc_base} if locate_bases else None)
+        if head_lock:
+            run("lock_head.py", sc, d["base"], lk, 2, 0, prof,
+                env={"LOCATE_BASE": loc_base} if locate_bases else None)
+        else:   # Sprixen's own head (turns with the body, hair moves); only the matte is cleaned
+            run("clean_sheet.py", sc, lk)
+            print(run("match_head.py", lk, d["base"], lk, prof).stdout.strip())   # approved head size
         print(run("match_legs.py", lk, d["base"], lk, prof).stdout.strip())   # never taller walking than standing
         if cfg.get("fix_gloves"):
             run("fix_gloves.py", lk, lk)
@@ -143,16 +162,17 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
         if direction == "side" and extra_idles:
             for x in cfg.get("extra_idles", []):
                 xo = os.path.join(ART, x["out"])
-                run("build_idle_strip.py", br, xo, x["height"], env={"BASE_H": base_h})
+                # extra idles keep the original 98x148 cells (they pair with older hand-made strips)
+                run("build_idle_strip.py", br, xo, x["height"], env={"BASE_H": base_h, "CELL_SCALE": "1", "REINK": "1"})
                 run("masks.py", xo, xo.replace(".png", "_mask.png"),
-                    round(head_px * x["height"] / H))
+                    round(head_px / K * x["height"] / H), env={"CELL_SCALE": "1"})
 
     # one face for every frame: re-stamp idle frame 0's head (whole-pixel positions) on all walk
     # and idle frames of each direction, then rebuild the recolour masks
-    for direction in ("side", "down", "up"):
+    for direction in (("side", "down", "up") if head_lock else ()):
         v = DIR_VIEW[direction]
         dp = views[v]["prof"]
-        head_px = round((dp["CHIN_CUT"] - dp["HEAD_TOP"]) / dp["HEIGHT"] * H)
+        head_px = round((dp["CHIN_CUT"] - dp["HEAD_TOP"]) / dp["HEIGHT"] * H * K)
         ref_idle = os.path.join(w, f"{direction}_idle_ref.png")
         shutil.copy(os.path.join(ART, f"{prefix}_{direction}_idle.png"), ref_idle)
         for kind in ("walk", "idle"):
@@ -167,6 +187,10 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
     sel_h = (mk[..., 1] >= 250) & (st[..., 3] >= 250)
     manifest["skin_ref"] = [round(v / 255, 4) for v in np.median(st[sel_s][:, :3], 0)]
     manifest["hair_ref"] = [round(v / 255, 4) for v in np.median(st[sel_h][:, :3], 0)]
+    from cells import CELL_W, CELL_H
+    manifest["cell"] = [CELL_W, CELL_H]          # player.gd: frame size and draw scale of these strips
+    manifest["draw_scale"] = round(0.75 / K, 4)
+    manifest["smooth"] = K != 1
     with open(os.path.join(ART, f"{prefix}_anims.json"), "w") as fh:
         json.dump(manifest, fh, indent=1)
 
@@ -175,7 +199,7 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
     for direction in ("side", "down", "up"):
         for kind in ("walk", "idle"):
             r = run("qa_strip.py", os.path.join(ART, f"{prefix}_{direction}_{kind}.png"),
-                    f"{prefix}_{direction}_{kind}", H, kind)
+                    f"{prefix}_{direction}_{kind}", round(H * K), kind)
             for line in r.stdout.splitlines():
                 if line.startswith("==") or "FAIL" in line or "RESULT" in line:
                     print(line)

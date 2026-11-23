@@ -29,6 +29,12 @@ def fix(f):
     skin = solid & below & (R > 150) & (R > G) & (G > B) & (R - B > 45) & (lum > 120) & (B > 0.52 * R)
     leather = solid & (R > G) & (G >= B) & (R - B > 25) & (lum > 40) & (lum < 130)
     sleeve = solid & (rgb.min(2) > 175) & (rgb.max(2) - rgb.min(2) < 40)
+    # only real sleeve patches count (a knuckle highlight is white too, but tiny)
+    sl, ns = ndimage.label(sleeve)
+    if ns:
+        sz = ndimage.sum(sleeve, sl, range(1, ns + 1))
+        sleeve = np.isin(sl, 1 + np.where(sz >= 40)[0])
+    lum_s = ndimage.gaussian_filter(lum, 1.2)
     lab, n = ndimage.label(skin, structure=np.ones((3, 3)))
     changed = 0
     for k in range(1, n + 1):
@@ -42,10 +48,19 @@ def fix(f):
         ly = np.where(ring)[0].mean()
         if cy < ly - 1:          # above the glove = forearm, keep
             continue
-        # leather colour of this glove, shaded by the finger's own brightness
+        # leather colour of this glove
         glove = np.median(rgb[ring], axis=0)
-        skin_l = np.median(lum[comp])
-        shade = (lum[comp] / max(skin_l, 1))[:, None]
+        glove_l = float(glove.mean())
+        # take in the finger's shaded edges and knuckle highlights too (anything lighter than the
+        # leather right next to it, that is not the sleeve), so no tan or white specks are left
+        for _ in range(3):
+            grow = ndimage.binary_dilation(comp) & solid & ~comp & ~sleeve & (lum > glove_l + 18) & below
+            if not grow.any():
+                break
+            comp |= grow
+        # smooth shading: the finger's blurred brightness, gently mapped onto the leather
+        skin_l = np.median(lum_s[comp])
+        shade = np.clip(1 + 0.45 * (lum_s[comp] / max(skin_l, 1) - 1), 0.78, 1.18)[:, None]
         rgb[comp] = np.clip(glove[None, :] * shade, 0, 255)
         changed += int(comp.sum())
     f[:, :, :3] = rgb

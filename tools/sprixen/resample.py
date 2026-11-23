@@ -40,7 +40,10 @@ def defringe(img, lighter=40, passes=2):
     return Image.fromarray(a.astype(np.uint8))
 
 
-def snap_feet(img, cell_w=98, foot_y=147):
+def snap_feet(img, cell_w=None, foot_y=None):
+    from cells import CELL_W, FOOT_Y
+    cell_w = cell_w or CELL_W
+    foot_y = foot_y or FOOT_Y
     """Shift each cell up/down so its lowest solid row sits exactly on the ground row
     (rounding during scaling can leave a frame floating or sunk by 1px)."""
     a = np.array(img.convert("RGBA"))
@@ -59,7 +62,9 @@ def snap_feet(img, cell_w=98, foot_y=147):
     return Image.fromarray(a)
 
 
-def fill_pinholes(img, max_px=12):
+def fill_pinholes(img, max_px=None):
+    from cells import K
+    max_px = max_px or round(12 * K * K)
     """Close tiny see-through pockets fully enclosed by the body (one-frame flicker gaps
     between a forearm and the hip); real gaps like between the legs are much larger."""
     from scipy import ndimage

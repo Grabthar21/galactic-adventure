@@ -17,9 +17,7 @@ from PIL import Image
 from resample import downscale, defringe, snap_feet, fill_pinholes, remove_specks, restore_outline
 
 SRC = 256
-CELL_W, CELL_H = 98, 148
-FOOT_Y = 147
-CENTER_X = 46
+from cells import CELL_W, CELL_H, FOOT_Y, CENTER_X, K, REINK
 GAME_SCALE = 0.75   # player.gd SCALE
 
 
@@ -30,7 +28,7 @@ def alpha(f):
 def main():
     sheet = Image.open(sys.argv[1]).convert("RGBA")
     out = sys.argv[2]
-    target_h = float(sys.argv[3]) if len(sys.argv) > 3 else 133.0
+    target_h = (float(sys.argv[3]) if len(sys.argv) > 3 else 133.0) * K
     fps = float(sys.argv[4]) if len(sys.argv) > 4 else 20.0
     n_all = sheet.width // SRC
     order = [int(x) for x in sys.argv[5].split(",")] if len(sys.argv) > 5 else list(range(n_all))
@@ -72,7 +70,8 @@ def main():
         ys, xs = np.where(a)
         low = xs[ys > d["bot"] - 4]
         foot_x.append((low.min() - d["torso"]) * s)   # toe-side unused; heel edge
-    strip = snap_feet(fill_pinholes(restore_outline(remove_specks(fill_pinholes(defringe(strip))))))
+    strip = remove_specks(fill_pinholes(defringe(strip)))
+    strip = snap_feet(fill_pinholes(restore_outline(strip) if REINK else strip))
     strip.save(out)
     # planted-foot slide per frame (backwards = positive speed)
     dx = [foot_x[i] - foot_x[(i + 1) % n] for i in range(n)]

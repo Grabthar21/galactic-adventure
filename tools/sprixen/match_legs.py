@@ -44,35 +44,43 @@ def main():
         ys = np.where(f[:, :, 3].max(1) > 40)[0]
         tops.append(loc[1]); bots.append(ys.max()); hs.append(ys.max() - loc[1])
     med = float(np.median(hs))
-    excess = int(round(med - base_h * (1 + DIP)))
-    if excess <= 0:
-        Image.fromarray(sheet.astype(np.uint8)).save(sys.argv[3])
-        print(f"{sys.argv[1]}: walk median height {med:.0f} vs standing {base_h} -> legs unchanged")
-        return
-    excess = int(round(med - base_h))            # bring the median back to the standing height
+    hs = np.array(hs, float)
+    # a walk may never stand taller than the standing drawing
+    excess = int(round(med - base_h)) if med > base_h * (1 + DIP) else 0
+    # Smooth head path: once the feet are put on the ground, a frame's head height is its
+    # head-to-feet height. Sprixen's ground line wobbles by a few px (a toe lifts, a heel drops),
+    # which would make the head hop. Fit that height with a smooth loop curve (1st + 2nd
+    # harmonic: two steps per cycle) and stretch/shrink each frame's legs by the small difference.
+    tt = np.arange(n) / n
+    X = np.stack([np.ones(n)] + [fn(2 * np.pi * h * tt) for h in (1, 2) for fn in (np.cos, np.sin)], 1)
+    coef, *_ = np.linalg.lstsq(X, hs, rcond=None)
+    target = X @ coef - excess
+    delta = np.clip(target - hs, -9, 9)          # + = legs longer, - = shorter (256px units)
     out = np.zeros_like(sheet)
     for i, f in enumerate(frames):
         top, bot = tops[i], bots[i]
         hip = int(top + HIP * (bot - top))
         L = bot - hip
-        k = (L - excess) / L
-        new = np.zeros_like(f)
-        # above the hip: move down by `excess` whole pixels
-        new[excess:hip + excess] = f[:hip]
-        # hip -> feet: resample rows (premultiplied) so the band is `excess` px shorter
+        k = (L + delta[i]) / L
+        new_bot = bot                              # feet stay where they are; the body above moves
+        shift = -delta[i]                          # rows above the hip move up when legs lengthen
         pm = f.copy(); pm[..., :3] *= pm[..., 3:4] / 255.0
-        ys_out = np.arange(hip + excess, bot + 1)
-        src = hip + (ys_out - (hip + excess)) / k
+        yy = np.arange(SRC, dtype=np.float32)
+        new_hip = hip + shift
+        src = np.where(yy < new_hip, yy - shift, hip + (yy - new_hip) / k)
+        src = np.where(yy > new_bot, yy, src)      # below the feet: unchanged (empty)
         y0 = np.clip(np.floor(src).astype(int), 0, SRC - 1)
         y1 = np.clip(y0 + 1, 0, SRC - 1)
-        w = (src - y0)[:, None, None]
-        band = pm[y0] * (1 - w) + pm[y1] * w
-        a = band[..., 3:4]
-        band[..., :3] = np.where(a > 0, band[..., :3] * 255.0 / np.maximum(a, 1e-3), 0)
-        new[hip + excess:bot + 1] = band
-        out[:, i * SRC:(i + 1) * SRC] = new
+        w = (src - np.floor(src))[:, None, None]
+        valid = ((src >= 0) & (src <= SRC - 1))[:, None, None]
+        g = (pm[y0] * (1 - w) + pm[y1] * w) * valid
+        a = g[..., 3:4]
+        g[..., :3] = np.where(a > 0, g[..., :3] * 255.0 / np.maximum(a, 1e-3), 0)
+        out[:, i * SRC:(i + 1) * SRC] = g
     Image.fromarray(np.clip(out, 0, 255).astype(np.uint8)).save(sys.argv[3])
-    print(f"{sys.argv[1]}: walk median height {med:.0f} vs standing {base_h} -> legs shortened by {excess}px")
+    print(f"{sys.argv[1]}: walk median height {med:.0f} vs standing {base_h}"
+          f"{' -> legs shortened by %dpx' % excess if excess else ''}; head path smoothed "
+          f"(leg change {delta.min():+.1f}..{delta.max():+.1f}px)")
 
 
 if __name__ == "__main__":

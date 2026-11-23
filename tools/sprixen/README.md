@@ -1,5 +1,17 @@
 # Sprixen character animation pipeline
 
+## Two looks (config.json `style`)
+- **Sprixen style (Arthur since 23 Nov 2026, user's choice):** `{"cell_scale": 1.5, "head_lock": false, "reink": false}`.
+  Sprixen's own head turn and hair motion are kept (no pasted head, so no seam at the neck), outlines stay
+  soft (no pixel look), cells are 147x222 and the game draws them at half scale with smooth filtering
+  (`player.gd` reads the cell size from each strip's height). Steps: `clean_sheet.py` (soft-edged matte
+  clean-up, closes nape/collar notches, removes backdrop boxed in between arm and body) -> `match_head.py`
+  (approved head size + steadied bob) -> `match_legs.py` (never taller than standing + smooth head path:
+  legs stretch/shrink a few px so Sprixen's wobbling ground line doesn't make him hop) -> `fix_gloves.py`.
+  Hairstyle sets are skipped in this mode (each style would need its own Sprixen walks).
+- **Locked-face pixel look (earlier):** `head_lock: true, reink: true, cell_scale: 1` (98x148 cells; `lock_head.py` +
+  `stamp_head.py`).
+
 Turns Sprixen output into clean, consistent in-game walk + idle strips for any character,
 and checks every frame. Arthur (`chars/arthur/`) is the worked example.
 

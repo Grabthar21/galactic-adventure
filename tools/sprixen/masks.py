@@ -17,7 +17,7 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 
-CELL_W = 98
+from cells import CELL_W, K
 
 
 def ramp(x, lo, hi):

@@ -359,7 +359,10 @@ func show_title() -> void:
 			tr.material = _make_preview_material(hero, strip.replace(".png", "_mask.png"))
 		else:
 			at.atlas = load("res://art/%s_frames.png" % hero)
-		at.region = Rect2(0, 0, 98, 148)
+		var ch := float(at.atlas.get_height()) if at.atlas.get_height() < 300 else 148.0
+		at.region = Rect2(0, 0, round(ch * 98.0 / 148.0), ch)
+		if ch != 148.0:
+			tr.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		tr.texture = at
 		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE

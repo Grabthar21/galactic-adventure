@@ -15,7 +15,7 @@ import sys
 import numpy as np
 from PIL import Image
 
-CW, CH = 98, 148
+from cells import CELL_W as CW, CELL_H as CH
 SEARCH = 7          # +-px searched around the reference position
 
 

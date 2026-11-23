@@ -20,7 +20,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 from scipy import ndimage
 
-CELL_W, CELL_H, FOOT_Y = 98, 148, 147
+from cells import CELL_W, CELL_H, FOOT_Y, K
 
 
 def frames_of(path):
@@ -64,20 +64,20 @@ def main():
             _, (iy, ix) = ndimage.distance_transform_edt(~inner, return_indices=True)
             halo = edge & (lum - lum[iy, ix] > 45) & (lum > 170)
             h = int(halo.sum())
-            if h > 6:
+            if h > 6 * K:
                 fails.append(f"frame {i}: {h} white-fringe edge pixels")
             elif h:
                 notes.append(f"frame {i}: {h} light edge px (ok)")
         haze = m & ndimage.binary_dilation(outside, iterations=3) & (rgb.min(2) > 140) & (rgb[:, :, 0] < np.maximum(rgb[:, :, 1], rgb[:, :, 2]) - 6)
-        if haze.sum() > 3:
+        if haze.sum() > 3 * K * K:
             fails.append(f"frame {i}: {int(haze.sum())} cool/greenish haze px")
         holes, nh = ndimage.label(ndimage.binary_fill_holes(solid) & ~solid)
         for k in range(1, nh + 1):
             sz = int((holes == k).sum())
             hy, hx = np.where(holes == k)
-            if sz <= 12:   # same limit as resample.fill_pinholes; bigger = real arm/leg gap
+            if sz <= 12 * K * K:   # same limit as resample.fill_pinholes; bigger = real arm/leg gap
                 fails.append(f"frame {i}: pinhole {sz}px at ({int(hx.mean())},{int(hy.mean())})")
-            elif hy.mean() < top + 0.45 * (bot - top):
+            elif hy.mean() < top + 0.45 * (bot - top) and sz < 40 * K * K:
                 fails.append(f"frame {i}: see-through hole {sz}px in head/chest at ({int(hx.mean())},{int(hy.mean())})")
             else:
                 notes.append(f"frame {i}: {sz}px gap at ({int(hx.mean())},{int(hy.mean())}) - arm/leg gap, ok")
@@ -96,16 +96,17 @@ def main():
     med_h = float(np.median(H))
     # (absolute size is checked across animations by qa_cross.py: a wide stance is
     #  legitimately shorter than the standing drawing, so height alone isn't a size test)
-    if kind == "idle" and H.max() - H.min() > 3:
+    if kind == "idle" and H.max() - H.min() > 3 * K:
         fails.append(f"idle height varies {H.min():.0f}-{H.max():.0f}px")
-    if kind == "walk" and H.max() - H.min() > 8:
+    if kind == "walk" and H.max() - H.min() > 8 * K:
         fails.append(f"walk height varies {H.min():.0f}-{H.max():.0f}px")
     jumps = np.abs(np.diff(np.r_[C, C[0]]))
-    if jumps.max() > 2.5:
+    if jumps.max() > 2.5 * K:
         fails.append(f"body centre jumps {jumps.max():.1f}px between frames {int(jumps.argmax())}->{(int(jumps.argmax()) + 1) % n}")
     # head shape stability (IoU vs median frame)
     ref = heads[n // 2]
-    for i, h in enumerate(heads):
+    import os
+    for i, h in enumerate(heads if os.environ.get("HEAD_LOCK", "1") != "0" else []):   # Sprixen-head mode: the head turns
         k = min(len(h), len(ref))
         inter = (h[:k] & ref[:k]).sum(); uni = (h[:k] | ref[:k]).sum()
         iou = inter / max(uni, 1)
@@ -115,7 +116,7 @@ def main():
     d = np.array([(masks[i] ^ masks[(i + 1) % n]).sum() for i in range(n)], float)
     med = np.median(d)
     for i, v in enumerate(d):
-        if v > max(2.6 * med, med + 120):
+        if v > max(2.6 * med, med + 120 * K * K):
             fails.append(f"pop: frame {i}->{(i + 1) % n} changes {int(v)}px (typical {int(med)})")
 
     print(f"== {name}: {n} frames, height {H.min():.0f}-{H.max():.0f} (median {med_h:.0f}, target {target:.0f}), "

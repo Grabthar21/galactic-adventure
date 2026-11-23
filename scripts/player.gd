@@ -19,6 +19,9 @@ const ROLL_TIME := 0.32
 const ROLL_COOLDOWN := 0.15
 const CELL := Vector2(98, 148) # frame size in the prepared sheets
 const SCALE := 0.75
+# strips from tools/sprixen may be drawn larger than the 98x148 cells (the smooth Sprixen-style
+# look, e.g. 147x222): the cell is read from each strip's height and drawn at SCALE * 148 / height
+var _anim_cell := {}           # animation name -> Vector2 cell size
 const SWING_TIMES := [0.26, 0.26, 0.40]  # combo hit 1, 2, 3
 const HIT_AT := 0.07
 
@@ -57,6 +60,7 @@ func _ready() -> void:
 	sprite = AnimatedSprite2D.new()
 	sprite.scale = Vector2(SCALE, SCALE)
 	sprite.offset = Vector2(0, -CELL.y / 2.0 + 2.0)
+	sprite.animation_changed.connect(_apply_cell)
 	add_child(sprite)
 	fx = Node2D.new()
 	fx.draw.connect(_draw_fx)
@@ -94,31 +98,32 @@ func setup(hero: String) -> void:
 	if ResourceLoader.exists(side_path):
 		# Skinned 12-frame side cycle from tools/walk_skin.py (frame 0 = near heel strike)
 		var side_tex: Texture2D = load(side_path)
-		var count := int(side_tex.get_width() / CELL.x)
+		var count := int(side_tex.get_width() / _strip_cell(side_tex).x)
 		var cells := []
 		for c in count:
 			cells.append([0, c])
 		var side_fps: float = SIDE_WALK_FPS_BY_HERO.get(hero, SIDE_WALK_FPS)
 		if hero == base:
 			side_fps = _fps(anims, "walk_side", side_fps)
-		_add_anim(frames, side_tex, "walk_side", cells, side_fps)
+		_add_anim(frames, side_tex, "walk_side", cells, side_fps, _strip_cell(side_tex))
 		var idle_path := "res://art/%s_side_idle.png" % (look if hero == base else hero)
 		if ResourceLoader.exists(idle_path):
 			# Breathing idle loop (tools/sprixen/build_idle_strip.py); a single-cell file still works
 			var idle_tex: Texture2D = load(idle_path)
-			var idle_count := int(idle_tex.get_width() / CELL.x)
+			var idle_count := int(idle_tex.get_width() / _strip_cell(idle_tex).x)
 			var idle_cells := []
 			for c in idle_count:
 				idle_cells.append([0, c])
-			_add_anim(frames, idle_tex, "idle_side", idle_cells, _fps(anims, "idle_side", IDLE_SIDE_FPS) if idle_count > 1 else 1.0)
+			_add_anim(frames, idle_tex, "idle_side", idle_cells, _fps(anims, "idle_side", IDLE_SIDE_FPS) if idle_count > 1 else 1.0, _strip_cell(idle_tex))
 		else:
-			_add_anim(frames, side_tex, "idle_side", [[0, count / 3]], 1.0)
+			_add_anim(frames, side_tex, "idle_side", [[0, count / 3]], 1.0, _strip_cell(side_tex))
 	else:
 		_add_anim(frames, tex, "walk_side", [[1, 0], [1, 1], [1, 2], [1, 3]], 8.0)
 		_add_anim(frames, tex, "idle_side", [[1, 0]], 1.0)
 	sprite.sprite_frames = frames
 	_setup_recolor(anims)
 	sprite.play("idle_down")
+	_apply_cell()
 
 
 ## Skin / hair customization: shaders/recolor.gdshader with the mask strip of the current animation.
@@ -178,14 +183,32 @@ func _add_strip(frames: SpriteFrames, anim: String, path: String, fps: float) ->
 	if not ResourceLoader.exists(path):
 		return false
 	var t: Texture2D = load(path)
+	var cell := _strip_cell(t)
 	var cells := []
-	for c in int(t.get_width() / CELL.x):
+	for c in int(t.get_width() / cell.x):
 		cells.append([0, c])
-	_add_anim(frames, t, anim, cells, fps)
+	_add_anim(frames, t, anim, cells, fps, cell)
 	return true
 
 
-func _add_anim(frames: SpriteFrames, tex: Texture2D, anim: String, cells: Array, fps: float) -> void:
+## A one-row strip's cell: its height, with the 98:148 cell shape.
+func _strip_cell(t: Texture2D) -> Vector2:
+	var h := float(t.get_height())
+	return Vector2(round(h * CELL.x / CELL.y), h)
+
+
+## Size, anchor and filtering follow the current animation's cell (big smooth strips are drawn
+## smaller with smooth filtering; the original 98x148 cells keep the crisp pixel look).
+func _apply_cell() -> void:
+	var cell: Vector2 = _anim_cell.get(String(sprite.animation), CELL)
+	var k := CELL.y / cell.y
+	sprite.scale = Vector2(SCALE * k, SCALE * k)
+	sprite.offset = Vector2(0, -cell.y / 2.0 + 2.0 / k)
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_PARENT_NODE if cell.y == CELL.y else CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+
+
+func _add_anim(frames: SpriteFrames, tex: Texture2D, anim: String, cells: Array, fps: float, cell: Vector2 = CELL) -> void:
+	_anim_cell[anim] = cell
 	# a strip built by tools/sprixen has a matching <strip>_mask.png for skin/hair recolouring
 	var mask_path := tex.resource_path.replace(".png", "_mask.png")
 	if tex.resource_path.ends_with(".png") and ResourceLoader.exists(mask_path):
@@ -198,7 +221,7 @@ func _add_anim(frames: SpriteFrames, tex: Texture2D, anim: String, cells: Array,
 	for c in cells:
 		var at := AtlasTexture.new()
 		at.atlas = tex
-		at.region = Rect2(c[1] * CELL.x, c[0] * CELL.y, CELL.x, CELL.y)
+		at.region = Rect2(c[1] * cell.x, c[0] * cell.y, cell.x, cell.y)
 		frames.add_frame(anim, at)
 
 
