@@ -32,8 +32,13 @@ ART = os.path.normpath(os.path.join(HERE, "..", "..", "art"))
 DIR_VIEW = {"side": "side", "down": "front", "up": "back"}
 
 
+RUN_CELL_W = None   # set from config "run_cell_w": run strips use wider cells (a run's stride is wide)
+
+
 def run(*args, env=None, quiet=True):
     e = dict(os.environ, **(env or {}))
+    if RUN_CELL_W and any("_run" in str(a) for a in args):
+        e.setdefault("CELL_W", str(RUN_CELL_W))     # every step touching a run strip uses its cell
     r = subprocess.run([sys.executable, *map(str, args)], cwd=HERE, env=e,
                        capture_output=True, text=True)
     if r.returncode not in (0, 1) or (r.returncode == 1 and "qa_" not in str(args[0])):
@@ -48,6 +53,8 @@ def main():
     name = sys.argv[1]
     cdir = os.path.join(HERE, "chars", name)
     cfg = json.load(open(os.path.join(cdir, "config.json")))
+    global RUN_CELL_W
+    RUN_CELL_W = cfg.get("run_cell_w")
     st = cfg.get("style", {})
     # every step (subprocesses too) reads the cell size and outline mode from the environment
     os.environ["CELL_SCALE"] = str(st.get("cell_scale", 1))
@@ -116,6 +123,7 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
 
     manifest, results = {}, []
     refs = {}
+    walk_scale = {}
     for direction in ("side", "down", "up"):
         v = DIR_VIEW[direction]
         d = views[v]
@@ -136,7 +144,11 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
             # the raw walk shows the approved head, so scale/locate against the approved drawing
             loc_base = locate_bases[v] if locate_bases else d["base"]
             loc_prof = json.dumps({k: head_rows(loc_base)[k] for k in ("HEAD_TOP", "BROW", "CHIN_CUT", "FACE")})
-            run("match_scale.py", loop, loc_base, sc, loc_prof)
+            ms = run("match_scale.py", loop, loc_base, sc, loc_prof,
+                     env={"FALLBACK_SCALE": str(walk_scale[direction])} if kind != "walk" and direction in walk_scale else None).stdout
+            print(ms.strip())
+            if kind == "walk":
+                walk_scale[direction] = float(ms.split("rescaled by ")[1].split()[0])
             lk = os.path.join(w, f"{direction}_{kind}_locked.png")
             if head_lock:
                 run("lock_head.py", sc, d["base"], lk, 2, 0, prof,
@@ -148,11 +160,17 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
                 run("clean_sheet.py", sc, geo, "--gentle")
                 run("clean_sheet.py", sc, lk, "--gentle")
                 geo2 = geo.replace(".png", "_h.png")
-                print(run("match_head.py", geo, d["base"], geo2, prof).stdout.strip())   # approved head size
-                run("match_head.py", lk, d["base"], lk, prof, env={"GEOM_SHEET": geo})
                 geo3 = geo.replace(".png", "_l.png")
-                run("match_legs.py", geo2, d["base"], geo3, prof)
-                run("match_legs.py", lk, d["base"], lk, prof, env={"GEOM_SHEET": geo2})
+                if kind == "run":
+                    # a run is kept exactly as Sprixen's locked camera drew it (one uniform scale):
+                    # per-frame head/leg fitting moves the airborne frames and makes the head pop
+                    shutil.copy(geo, geo2)
+                    shutil.copy(geo, geo3)
+                else:
+                    print(run("match_head.py", geo, d["base"], geo2, prof).stdout.strip())   # approved head size
+                    run("match_head.py", lk, d["base"], lk, prof, env={"GEOM_SHEET": geo})
+                    run("match_legs.py", geo2, d["base"], geo3, prof)
+                    run("match_legs.py", lk, d["base"], lk, prof, env={"GEOM_SHEET": geo2})
             if head_lock:
                 print(run("match_legs.py", lk, d["base"], lk, prof).stdout.strip())   # never taller walking than standing
             if cfg.get("fix_gloves"):
@@ -161,23 +179,29 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
                 run("skin_match.py", ref, lk, lk)
             if not head_lock:   # Sprixen-style: give every frame the approved drawing's outline
                 print(run("ink_outline.py", lk, d["base"], lk,
-                          env={"OUTLINE_WEIGHT": str(cfg.get("style", {}).get("outline_weight", 1))}).stdout.strip())
+                          env={"OUTLINE_WEIGHT": str(cfg.get("style", {}).get("outline_weight", 1)),
+                               **({"STRICT_ROWS": "1"} if kind == "run" else {})}).stdout.strip())
             fps = round(frames / (cycle if kind == "walk" else cfg.get("run_cycle_seconds", 0.55)), 2)
             strip = os.path.join(ART, f"{prefix}_{direction}_{kind}.png")
+            fixed = {"PLACE_FIXED": "1"} if kind == "run" else {}
             run("build_walk_strip.py", lk, strip, H, fps,
-                env={"BASE_H": base_h, **({} if head_lock else {"PLACE_FROM": geo3})})
+                env={"BASE_H": base_h, **fixed, **({} if head_lock else {"PLACE_FROM": geo3})})
             if not head_lock:
                 # reference: Sprixen's own frames with the same geometry and no clean-up (qa_fidelity.py)
                 rf = os.path.join(w, f"{direction}_{kind}_ref.png")
-                run("match_head.py", sc, d["base"], rf, prof, env={"GEOM_SHEET": geo})
-                run("match_legs.py", rf, d["base"], rf, prof, env={"GEOM_SHEET": geo2})
+                if kind == "run":
+                    shutil.copy(sc, rf)
+                else:
+                    run("match_head.py", sc, d["base"], rf, prof, env={"GEOM_SHEET": geo})
+                    run("match_legs.py", rf, d["base"], rf, prof, env={"GEOM_SHEET": geo2})
                 refs[(direction, kind)] = os.path.join(w, f"{direction}_{kind}_ref_strip.png")
                 run("build_walk_strip.py", rf, refs[(direction, kind)], H, fps,
-                    env={"BASE_H": base_h, "PLACE_FROM": geo3, "REINK": "0"})
+                    env={"BASE_H": base_h, "PLACE_FROM": geo3, "REINK": "0", **fixed})
             if not head_lock and direction == "side":
                 pass   # the near-glove size is matched after the idle strip exists (below)
             run("masks.py", strip, strip.replace(".png", "_mask.png"), head_px)   # skin/hair for recolouring
-            manifest[f"{kind}_{direction}"] = {"frames": frames, "fps": fps}
+            manifest[f"{kind}_{direction}"] = {"frames": frames, "fps": fps,
+                                               **({"cell_w": RUN_CELL_W} if kind == "run" and RUN_CELL_W else {})}
             strips[kind] = strip
             print(f"{kind}_{direction}: {out}")
 
@@ -192,17 +216,22 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
         for kind, strip in strips.items():
           if not head_lock:
             rfp = refs[(direction, kind)]
-            if direction == "side":
+            if direction == "side" and kind == "walk":   # a run's hand is foreshortened as Sprixen drew it
                 # near hand: one size in every walk frame, measured from the approved standing drawing
                 print(run("match_glove.py", strip, istrip).stdout.strip())
             # one-frame blinks / dents in the upper body (what qa_shape.py checks), two passes
-            for _ in range(3):
-                print(run("deflicker.py", strip, env={"REF_STRIP": rfp}).stdout.strip())
-            print(run("qa_fidelity.py", strip, rfp, "--fix").stdout.strip())
-            print(run("deflicker.py", strip, env={"REF_STRIP": rfp}).stdout.strip())
-            print(run("deflicker.py", strip, env={"REF_STRIP": rfp}).stdout.strip())
-            print(run("qa_fidelity.py", strip, rfp, "--fix").stdout.strip())
-            print(run("deflicker.py", strip, env={"REF_STRIP": rfp}).stdout.strip())
+            mt = {"MOTION_TOL": "2" if kind == "run" else "1"}
+            steps = (["deflicker"] * 3 + ["fix"] + ["deflicker"] * 2 + ["fix", "deflicker"]) if kind == "walk" \
+                else ["static", "static", "fix", "static"]   # runs: no blending between frames
+            for k, st in enumerate(steps):
+                if os.environ.get("DEBUG_STAGES"):
+                    shutil.copy(strip, f"/tmp/stage_{direction}_{kind}_{k}.png")
+                if st == "static":
+                    print(run("deflicker.py", strip, env={"REF_STRIP": rfp, "NO_TEMPORAL": "1", **mt}).stdout.strip())
+                elif st == "fix":
+                    print(run("qa_fidelity.py", strip, rfp, "--fix").stdout.strip())
+                else:
+                    print(run("deflicker.py", strip, env={"REF_STRIP": rfp, **mt}).stdout.strip())
             run("masks.py", strip, strip.replace(".png", "_mask.png"), head_px)
         if direction == "side" and extra_idles:
             for x in cfg.get("extra_idles", []):
@@ -246,7 +275,7 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
             if kind == "run" and direction not in cfg.get("runs", {}):
                 continue
             r = run("qa_strip.py", os.path.join(ART, f"{prefix}_{direction}_{kind}.png"),
-                    f"{prefix}_{direction}_{kind}", round(H * K), "idle" if kind == "idle" else "walk")
+                    f"{prefix}_{direction}_{kind}", round(H * K), kind)
             for line in r.stdout.splitlines():
                 if line.startswith("==") or "FAIL" in line or "RESULT" in line:
                     print(line)
@@ -260,7 +289,8 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
                     print(line)
             ok &= r.returncode == 0
             r = run("qa_shape.py", os.path.join(ART, f"{prefix}_{direction}_{kind}.png"),
-                    os.path.join(ART, f"{prefix}_{direction}_idle.png"), f"{prefix}_{direction}_{kind}")
+                    os.path.join(ART, f"{prefix}_{direction}_idle.png"), f"{prefix}_{direction}_{kind}",
+                    env={"MOTION_TOL": "2" if kind == "run" else "1", "REF_STRIP": refs[(direction, kind)]})
             for line in r.stdout.splitlines():
                 if line.startswith("==") or "FAIL" in line or "RESULT" in line:
                     print(line)

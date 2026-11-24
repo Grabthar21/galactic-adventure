@@ -38,6 +38,14 @@ for k in np.arange(0.85, 1.25, 0.005):
     if best is None or score > best[0]:
         best = (score, k)
 score, k = best
+import os
+fb = os.environ.get("FALLBACK_SCALE")
+note = ""
+if fb and score < 0.6:
+    # the approved drawing's upper body doesn't match this pose (a run leans and swings): use the
+    # scale measured on the same character's walk in this direction (Sprixen draws them the same size)
+    k = 1.0 / float(fb)
+    note = f" - weak match, using the walk's scale"
 s = 1.0 / k
 out = Image.new("RGBA", sheet.size, (0, 0, 0, 0))
 for i, f in enumerate(frames):
@@ -51,4 +59,4 @@ for i, f in enumerate(frames):
     cell.alpha_composite(g, (max(px, 0), max(py, 0)), (max(-px, 0), max(-py, 0)))
     out.paste(cell, (i * SRC, 0))
 out.save(sys.argv[3])
-print(f"{sys.argv[1]}: drawn at {k:.3f}x the base sprite (match {score:.3f}); rescaled by {s:.3f}")
+print(f"{sys.argv[1]}: drawn at {k:.3f}x the base sprite (match {score:.3f}); rescaled by {s:.3f}{note}")

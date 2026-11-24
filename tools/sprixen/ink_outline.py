@@ -47,7 +47,10 @@ def ink(f, col, col_l):
     need = np.clip((lum - col_l) / 60.0, 0, 1)          # already as dark as a line -> unchanged
     # eyes: in the 3/4 view the far eye sits on the face's outline; its white must stay white.
     # Very light pixels in the head (the top 21% of the figure, above the chin) are never inked.
-    ys = np.where(solid.any(1))[0]
+    import os
+    # runs: the same rows as the face check in main() (a run's soft hair tips would otherwise put
+    # the eye line outside the protected band); walks keep the approved measurement
+    ys = np.where(((a > 128) if os.environ.get("STRICT_ROWS") else solid).any(1))[0]
     if len(ys):
         head = np.zeros_like(solid)
         head[:ys.min() + int(0.21 * (ys.max() - ys.min()))] = True

@@ -3,6 +3,11 @@
   "frames": 29,
   "fps": 36.25
  },
+ "run_side": {
+  "frames": 18,
+  "fps": 32.73,
+  "cell_w": 240
+ },
  "idle_side": {
   "frames": 32,
   "fps": 12
@@ -11,6 +16,11 @@
   "frames": 30,
   "fps": 37.5
  },
+ "run_down": {
+  "frames": 26,
+  "fps": 47.27,
+  "cell_w": 240
+ },
  "idle_down": {
   "frames": 32,
   "fps": 12
@@ -18,6 +28,11 @@
  "walk_up": {
   "frames": 24,
   "fps": 30.0
+ },
+ "run_up": {
+  "frames": 23,
+  "fps": 41.82,
+  "cell_w": 240
  },
  "idle_up": {
   "frames": 32,

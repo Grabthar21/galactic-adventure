@@ -56,6 +56,9 @@ def main():
     score, k = best
     f = 1.0 / k
     scale_it = abs(f - 1) >= TOL
+    weak = score < 0.75          # the head doesn't match the drawing well (e.g. a run): measure nothing from it
+    if weak:
+        scale_it = False
     if not scale_it:
         f = 1.0
     t = cv2.resize(tm0, None, fx=k, fy=k, interpolation=cv2.INTER_AREA)
@@ -81,6 +84,8 @@ def main():
     coef, *_ = np.linalg.lstsq(X, ys_m, rcond=None)
     fit = X @ coef
     shift = np.clip(fit - ys_m, -4, 4)
+    if weak:
+        shift = np.zeros_like(shift)
     out = np.zeros_like(sheet)
     yy, xx = np.mgrid[0:SRC, 0:SRC].astype(np.float32)
     for i, fr in enumerate(frames):

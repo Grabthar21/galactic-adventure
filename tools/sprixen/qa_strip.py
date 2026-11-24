@@ -37,6 +37,7 @@ def main():
     n = len(fr)
     fails, notes = [], []
     heights, centres, bottoms, heads, masks = [], [], [], [], []
+    bots, frames_rgba = [], fr
     for i, f in enumerate(fr):
         a = f[:, :, 3]
         m = a > 0
@@ -88,9 +89,15 @@ def main():
             specks = [int(s) for s in sizes if s < main]
             if specks:
                 fails.append(f"frame {i}: {len(specks)} stray speck(s), largest {max(specks)}px")
-        if bot != FOOT_Y:
+        if kind == "run":
+            bots.append(bot)          # a run leaves the ground; checked for the whole strip below
+        elif bot != FOOT_Y:
             fails.append(f"frame {i}: feet at row {bot}, not on the ground row {FOOT_Y}")
 
+    for i, f in enumerate(fr):
+        a_ = f[:, :, 3] > 0
+        if a_[0].any() or a_[:, 0].any() or a_[:, -1].any():
+            fails.append(f"frame {i}: drawing touches the cell edge (cut off)")
     H = np.array(heights, float)
     C = np.array(centres)
     med_h = float(np.median(H))
@@ -98,10 +105,40 @@ def main():
     #  legitimately shorter than the standing drawing, so height alone isn't a size test)
     if kind == "idle" and H.max() - H.min() > 3 * K:
         fails.append(f"idle height varies {H.min():.0f}-{H.max():.0f}px")
+    if kind == "run" and H.max() - H.min() > 18 * K:
+        fails.append(f"run height varies {H.min():.0f}-{H.max():.0f}px")
     if kind == "walk" and H.max() - H.min() > 8 * K:
         fails.append(f"walk height varies {H.min():.0f}-{H.max():.0f}px")
+    if kind == "run":
+        # feet: never below the ground; the planted frames on it; airborne frames lifted a little
+        if max(bots) > FOOT_Y:
+            fails.append(f"feet below the ground row in a frame ({max(bots)} > {FOOT_Y})")
+        if max(bots) < FOOT_Y - 2:
+            fails.append(f"no frame has its feet on the ground (lowest row {max(bots)})")
+        if FOOT_Y - min(bots) > 16 * K:
+            fails.append(f"airborne frame lifted {FOOT_Y - min(bots)}px (more than {16 * K:.0f})")
+        # a run's silhouette centre swings with the legs; steadiness is judged on the head:
+        # its x and the top of the solid head block must move smoothly frame to frame
+        hx, hy = [], []
+        for f in frames_rgba:
+            sol = f[..., 3] >= 128
+            rows = np.where(sol.sum(1) >= 8)[0]
+            t = rows.min()
+            hy.append(t)
+            hx.append(np.where(sol[t:t + int(25 * K)])[1].mean())
+        hx, hy = np.array(hx), np.array(hy, float)
+        jx = np.abs(np.diff(np.r_[hx, hx[0]]))
+        jy = np.abs(np.diff(np.r_[hy, hy[0]]))
+        if jx.max() > 2.5 * K:
+            fails.append(f"head jumps sideways {jx.max():.1f}px between frames {int(jx.argmax())}->{(int(jx.argmax()) + 1) % n}")
+        # a jump is a step much bigger than the steps either side of it (the bounce itself is smooth)
+        for i in range(n):
+            nb = max(jy[i - 1], jy[(i + 1) % n])
+            if jy[i] > 5 * K and jy[i] > 2.2 * nb:
+                fails.append(f"head pops {jy[i]:.0f}px up/down between frames {i}->{(i + 1) % n}")
+        print(f"   head x {hx.min():.1f}-{hx.max():.1f} (max step {jx.max():.1f}), head top {hy.min():.0f}-{hy.max():.0f} (max step {jy.max():.0f}), feet {min(bots)}-{max(bots)}")
     jumps = np.abs(np.diff(np.r_[C, C[0]]))
-    if jumps.max() > 2.5 * K:
+    if kind != "run" and jumps.max() > 2.5 * K:
         fails.append(f"body centre jumps {jumps.max():.1f}px between frames {int(jumps.argmax())}->{(int(jumps.argmax()) + 1) % n}")
     # head shape stability (IoU vs median frame)
     ref = heads[n // 2]

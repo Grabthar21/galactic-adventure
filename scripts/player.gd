@@ -96,7 +96,11 @@ func setup(hero: String) -> void:
 		_add_anim(frames, tex, "walk_up", front_back_order.map(func(c): return [3, c]), 8.0)
 	# Run strips (tools/sprixen, art/<hero>_<side|down|up>_run.png); optional
 	for d in ["side", "down", "up"]:
-		_add_strip(frames, "run_" + d, "res://art/%s_%s_run.png" % [look, d], _fps(anims, "run_" + d, 30.0))
+		# run cells are wider than walk cells (a run's stride reaches further): width from the manifest
+		var rw := 0.0
+		if anims.has("run_" + d) and anims["run_" + d] is Dictionary and anims["run_" + d].has("cell_w"):
+			rw = float(anims["run_" + d]["cell_w"])
+		_add_strip(frames, "run_" + d, "res://art/%s_%s_run.png" % [look, d], _fps(anims, "run_" + d, 30.0), rw)
 	if not _add_strip(frames, "idle_up", "res://art/%s_up_idle.png" % look, _fps(anims, "idle_up", IDLE_SIDE_FPS)):
 		_add_anim(frames, tex, "idle_up", [[3, 0]], 1.0)
 	var side_path := "res://art/%s_side_walk.png" % (look if hero == base else hero)
@@ -184,11 +188,13 @@ func _fps(anims: Dictionary, key: String, fallback: float) -> float:
 
 
 ## Adds a one-row strip of CELL-sized frames as a looping animation; false if the file is missing.
-func _add_strip(frames: SpriteFrames, anim: String, path: String, fps: float) -> bool:
+func _add_strip(frames: SpriteFrames, anim: String, path: String, fps: float, cell_w: float = 0.0) -> bool:
 	if not ResourceLoader.exists(path):
 		return false
 	var t: Texture2D = load(path)
 	var cell := _strip_cell(t)
+	if cell_w > 0.0:
+		cell.x = cell_w
 	var cells := []
 	for c in int(t.get_width() / cell.x):
 		cells.append([0, c])

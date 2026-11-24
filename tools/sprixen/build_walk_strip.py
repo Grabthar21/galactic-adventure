@@ -54,13 +54,23 @@ def main():
     base = target_h / base_h
     strip = Image.new("RGBA", (CELL_W * n, CELL_H), (0, 0, 0, 0))
     foot_x = []   # x of the lowest (planted) foot, in game cell px, per frame
+    # PLACE_FIXED (runs): keep Sprixen's own locked camera -- one offset for every frame, so the
+    # body's lean and the bounce (feet leaving the ground) stay as drawn. Re-centring each frame
+    # on its torso band swings the head ~6 game px in a run (the arms cross that band), and
+    # snapping every frame's lowest pixel to the ground jerks the airborne frames down.
+    fixed = os.environ.get("PLACE_FIXED") == "1"
+    if fixed:
+        fx_torso = float(np.median([d["torso"] for d in info]))
+        fx_bot = max(d["bot"] for d in info)
     for i, (f, d) in enumerate(zip(frames, info)):
         s = base
         w2, h2 = round(SRC * s), round(SRC * s)
         big = downscale(f, w2, h2)
         # place: torso centre -> CENTER_X, feet bottom -> FOOT_Y
-        px = round(i * CELL_W + CENTER_X - d["torso"] * s)
-        py = round(FOOT_Y - d["bot"] * s)
+        px = round(i * CELL_W + CENTER_X - (fx_torso if fixed else d["torso"]) * s)
+        py = round(FOOT_Y - (fx_bot if fixed else d["bot"]) * s)
+        if fixed:
+            py = max(py, 3 - round(d["top"] * s))   # the hair of the highest frames stays inside the cell
         cell = Image.new("RGBA", (CELL_W * n, CELL_H), (0, 0, 0, 0))
         cell.alpha_composite(big, (max(px, 0), max(py, 0)),
                              (max(-px, 0), max(-py, 0)))
@@ -75,7 +85,9 @@ def main():
         low = xs[ys > d["bot"] - 4]
         foot_x.append((low.min() - d["torso"]) * s)   # toe-side unused; heel edge
     strip = remove_specks(fill_pinholes(defringe(strip)))
-    strip = snap_feet(fill_pinholes(restore_outline(strip) if REINK else strip))
+    strip = fill_pinholes(restore_outline(strip) if REINK else strip)
+    if not fixed:
+        strip = snap_feet(strip)
     strip.save(out)
     # planted-foot slide per frame (backwards = positive speed)
     dx = [foot_x[i] - foot_x[(i + 1) % n] for i in range(n)]

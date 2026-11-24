@@ -19,7 +19,9 @@ Upper body only (head to hips): the legs legitimately change a lot between frame
 usage: python3 qa_shape.py <walk_strip.png> <idle_strip.png> [name]   -> exit 1 on failure
 """
 import sys
+import os
 import numpy as np
+TOL = int(os.environ.get("MOTION_TOL", "1"))   # px of motion between frames treated as normal (runs move faster)
 from PIL import Image
 from scipy import ndimage
 
@@ -31,9 +33,10 @@ MIN_DENT = 3
 HIP = 0.50
 
 
-def cells(p):
+def cells(p, w=None):
     a = np.array(Image.open(p).convert("RGBA")).astype(np.float32)
-    return [a[:, i * CW:(i + 1) * CW] for i in range(a.shape[1] // CW)]
+    w = w or CW
+    return [a[:, i * w:(i + 1) * w] for i in range(a.shape[1] // w)]
 
 
 def disk(r):
@@ -61,14 +64,17 @@ def notches(s):
     return cl & ~s
 
 
-def slivers(f):
+def slivers(f, reach=1):
+    """reach 2 (runs) also finds a light pixel tucked one pixel inside the dark edge line"""
     s = f[..., 3] > 128
     up, top, bot = upper(f)
     neck = np.zeros_like(s)
     neck[top:top + int(.36 * (bot - top))] = True   # whole head and neck
+    if reach > 1:
+        neck[:] = True      # runs: light specks along the whole silhouette (e.g. at a wrist)
     lum = f[..., :3].mean(2)
     light = (f[..., 3] > 30) & (lum > 160)
-    outer = ndimage.binary_dilation(f[..., 3] < 30, iterations=1)
+    outer = ndimage.binary_dilation(f[..., 3] < 30, iterations=reach)
     # a light pixel on the outer edge whose solid neighbours are mostly much darker (hair, outline)
     # is a speck sticking out of the drawing (white/peach dots along the hair line)
     sol = f[..., 3] > 128
@@ -131,6 +137,73 @@ def arm_strands(f):
     return out
 
 
+def cuffs(f, m):
+    """the parts of m that are a sleeve cuff, not backdrop: closed off from the background by the
+    ink line and lying against forearm skin. In a run the elbow bends toward the camera and the
+    rolled cuff shows as a thin light band, which the strand / grey-gap checks would mistake for
+    backdrop."""
+    rgb = f[..., :3]
+    s = f[..., 3] > 128
+    dark = s & (rgb.mean(2) < 110)
+    reach, _ = ndimage.label(~dark)
+    border = set(np.unique(np.concatenate([reach[0], reach[-1], reach[:, 0], reach[:, -1]]))) - {0}
+    outside = np.isin(reach, list(border))
+    skin = s & (rgb[..., 0] > 170) & (rgb[..., 1] > 110) & (rgb[..., 0] - rgb[..., 2] > 45)
+    shirt = s & (rgb.min(2) > 175) & (rgb[..., 0] >= rgb[..., 2])
+    out = np.zeros_like(m)
+    lab, k = ndimage.label(m, structure=np.ones((3, 3)))
+    for j in range(1, k + 1):
+        c = lab == j
+        ring = ndimage.binary_dilation(c, iterations=2) & ~c
+        inside = (c & outside).sum() <= 0.2 * c.sum()
+        if np.median(rgb[c][:, 0] - rgb[c][:, 2]) >= 12:
+            out |= c          # warm white/grey is the shirt sleeve; Sprixen's backdrop is cool/neutral
+            continue
+        if inside and ((ring & skin).sum() >= 2 or (ring & shirt).sum() >= 0.3 * (ring & s).sum()):
+            out |= c
+    return out
+
+
+def boot_gaps(f):
+    """runs: light neutral grey/white between the lower legs and boots (bottom quarter of the
+    figure). Boots are brown and trousers navy, so a colourless light patch there is Sprixen's
+    backdrop showing through the gap between the legs. Buckles (gold/tan) are not neutral."""
+    s = f[..., 3] > 60
+    ys = np.where(s.any(1))[0]
+    top, bot = ys.min(), ys.max()
+    rgb = f[..., :3]
+    lum = rgb.mean(2)
+    sat = rgb.max(2) - rgb.min(2)
+    m = s & (sat < 30) & (lum > 90)
+    m[:top + int(0.70 * (bot - top))] = False
+    lab, k = ndimage.label(m, structure=np.ones((3, 3)))
+    out = np.zeros_like(m)
+    for j in range(1, k + 1):
+        c = lab == j
+        if c.sum() >= 3:
+            out |= c
+    return out
+
+
+def inner_halo(f, ref_alpha):
+    """runs: light pixels just inside the ink line where Sprixen's frame was still a soft,
+    half-transparent edge (its pale matte fringe), noticeably lighter than the drawing further in.
+    Returns (mask, the colour to give them: the nearest pixel deeper in)."""
+    a = f[..., 3]
+    sol = a >= 128
+    depth = ndimage.distance_transform_edt(sol)
+    lum = f[..., :3].mean(2)
+    deep = sol & (depth >= 4) & (ref_alpha >= 250)
+    _, (iy, ix) = ndimage.distance_transform_edt(~deep, return_indices=True)
+    inner = lum[iy, ix]
+    m = sol & (depth <= 3) & (ref_alpha < 235) & (lum > inner + 30) & (lum > 150)
+    ys = np.where(sol.any(1))[0]
+    m[ys.min() + int(0.22 * (ys.max() - ys.min())):] = False   # head only (hair tips, ears): the
+    # collar's white edge meets the neck lower down and must keep its own colour
+    m &= ~((iy == 0) & (ix == 0) & ~deep[0, 0])
+    return m, f[iy, ix, :3]
+
+
 def grey_gaps(f):
     """neutral grey patches between forearm, glove, hip and trousers (elbow to thigh): Sprixen's
     backdrop blended into a narrow gap. Nothing in the outfit there is a neutral mid grey (the
@@ -166,7 +239,9 @@ def grey_gaps(f):
 
 
 def main():
-    walk, idle = cells(sys.argv[1]), cells(sys.argv[2])
+    walk = cells(sys.argv[1])
+    ih = Image.open(sys.argv[2]).height
+    idle = cells(sys.argv[2], round(ih * 98 / 148))    # the standing strip keeps the normal cell
     name = sys.argv[3] if len(sys.argv) > 3 else sys.argv[1]
     n = len(walk)
     fails = []
@@ -174,11 +249,14 @@ def main():
     U = [upper(f)[0] for f in walk]
     # shirt/collar white, as its own layer: a white patch that blinks is a flashing collar
     Wt = [(f[..., 3] > 128) & (f[..., :3].min(2) > 170) for f in walk]
-    for layer, L in (("outline", S), ("white", Wt)):
+    # one-frame checks compare a frame with its neighbours; a run changes pose too much between
+    # frames for that, so runs are checked against Sprixen's own frames instead (check 12)
+    temporal = TOL < 2
+    for layer, L in (("outline", S), ("white", Wt)) if temporal else ():
         for i in range(n):
             p, c, q = L[i - 1], L[i], L[(i + 1) % n]
-            both_on = ndimage.binary_erosion(p, iterations=1) & ndimage.binary_erosion(q, iterations=1)
-            both_off = ~ndimage.binary_dilation(p, iterations=1) & ~ndimage.binary_dilation(q, iterations=1)
+            both_on = ndimage.binary_erosion(p, iterations=TOL) & ndimage.binary_erosion(q, iterations=TOL)
+            both_off = ~ndimage.binary_dilation(p, iterations=TOL) & ~ndimage.binary_dilation(q, iterations=TOL)
             for kind, m in (("missing", both_on & ~c), ("extra", both_off & c)):
                 lab, k = ndimage.label(m & U[i])
                 for j in range(1, k + 1):
@@ -188,8 +266,8 @@ def main():
                         fails.append(f"frame {i}: {layer} patch {kind} for one frame, {int(comp.sum())}px at ({int(xx.mean())},{int(yy.mean())})")
     N = [notches(s) & u for s, u in zip(S, U)]
     ref_notch = int((notches(idle[0][..., 3] > 128) & upper(idle[0])[0]).sum())
-    for i in range(n):
-        lone = N[i] & ~ndimage.binary_dilation(N[i - 1], iterations=1) & ~ndimage.binary_dilation(N[(i + 1) % n], iterations=1)
+    for i in range(n if temporal else 0):
+        lone = N[i] & ~ndimage.binary_dilation(N[i - 1], iterations=TOL) & ~ndimage.binary_dilation(N[(i + 1) % n], iterations=TOL)
         lab, k = ndimage.label(lone)
         for j in range(1, k + 1):
             comp = lab == j
@@ -199,7 +277,7 @@ def main():
     # wide bites present in this frame only (not in the frames before/after, and not in the
     # standing drawing's own outline)
     BN = [big_notches(s) & u for s, u in zip(S, U)]
-    for i in range(n):
+    for i in range(n if temporal else 0):
         lone = BN[i] & ~ndimage.binary_dilation(BN[i - 1], iterations=2) & ~ndimage.binary_dilation(BN[(i + 1) % n], iterations=2)
         lab, k = ndimage.label(lone)
         for j in range(1, k + 1):
@@ -209,7 +287,7 @@ def main():
                 fails.append(f"frame {i}: bite out of the outline, {int(comp.sum())}px at ({int(xx.mean())},{int(yy.mean())})")
     # slits: see-through areas closed off by a 1-px line in the upper body (a part drawn as an
     # outline with nothing inside)
-    for i, (sh, u) in enumerate(zip(S, U)):
+    for i, (sh, u) in enumerate(zip(S, U) if temporal else ()):
         clo = ndimage.binary_closing(np.pad(sh, 3), structure=np.ones((3, 3)))[3:-3, 3:-3]
         sl = ndimage.binary_fill_holes(clo) & ~ndimage.binary_fill_holes(sh) & ~sh & u
         lab, k = ndimage.label(sl)
@@ -223,7 +301,7 @@ def main():
         if v > 2 * ref_notch + 25:
             fails.append(f"frame {i}: rough outline, {v} notch px (standing drawing {ref_notch})")
     ref_sl = int(slivers(idle[0]).sum())
-    sl = [int(slivers(f).sum()) for f in walk]
+    sl = [int(slivers(f, 1 if temporal else 2).sum()) for f in walk]
     for i, v in enumerate(sl):
         if v > ref_sl + 2:
             fails.append(f"frame {i}: {v}px of thin light sliver on the head/neck edge (standing drawing {ref_sl})")
@@ -231,6 +309,15 @@ def main():
     for i, f in enumerate(walk):
         cw = (f[..., 3] > 60) & (f[..., :3].min(2) > 165) & (f[..., 2] >= f[..., 0] + 5) \
             & (f[..., :3].max(2) - f[..., :3].min(2) < 30)
+        if not temporal:     # runs: cool shading inside the shirt's ink line is the shirt
+            cw &= ~cuffs(f.astype(float), cw)
+            # ... and so is a cool patch nowhere near the see-through background (backdrop only
+            # shows at the silhouette's edge or in a gap open to it)
+            near_clear = ndimage.binary_dilation(f[..., 3] < 30, iterations=3)
+            lab_, k_ = ndimage.label(cw)
+            for j_ in range(1, k_ + 1):
+                if not (near_clear & (lab_ == j_)).any():
+                    cw &= lab_ != j_
         lab, k = ndimage.label(cw)
         for j in range(1, k + 1):
             comp = lab == j
@@ -278,12 +365,16 @@ def main():
     # 9. BETWEEN FOREARM AND BODY: thin white strands
     for i, f in enumerate(walk):
         m = arm_strands(f)
+        if not temporal:
+            m &= ~cuffs(f, m)
         if m.sum():
             yy, xx = np.where(m)
             fails.append(f"frame {i}: thin white strand by the forearm, {int(m.sum())}px around ({int(xx.mean())},{int(yy.mean())})")
     # 10. GREY BACKDROP in the gaps between forearm, glove, hip and trousers
     for i, f in enumerate(walk):
         m = grey_gaps(f)
+        if not temporal:
+            m &= ~cuffs(f, m)
         if m.sum():
             yy, xx = np.where(m)
             fails.append(f"frame {i}: grey backdrop between arm and body, {int(m.sum())}px around ({int(xx.mean())},{int(yy.mean())})")
@@ -293,6 +384,56 @@ def main():
     for i, v in enumerate(cc):
         if v > 24:
             fails.append(f"frame {i}: collar behind the neck differs from the rest of the loop ({v}px: background or a dark patch)")
+    # 12. HOLES WE MADE: solid in Sprixen's own frame, see-through in ours
+    rp = os.environ.get("REF_STRIP")
+    if rp and not temporal:
+        R = np.array(Image.open(rp).convert("RGBA")).astype(int)
+        cw = R.shape[1] // n
+        for i in range(n):
+            ra = R[:, i * cw:(i + 1) * cw, 3]
+            sa = walk[i][..., 3] if walk[i].shape[:2] == ra.shape else None
+            if sa is None:
+                continue
+            lab, k = ndimage.label((ra > 200) & (sa < 100))
+            for j in range(1, k + 1):
+                comp = lab == j
+                rr = R[:, i * cw:(i + 1) * cw, :3][comp]
+                backdrop = (rr.max(1) - rr.min(1) < 40) & (rr.mean(1) > 100)   # Sprixen's grey/white backdrop
+                if comp.sum() >= 6 and backdrop.mean() < 0.5:
+                    yy, xx = np.nonzero(comp)
+                    fails.append(f"frame {i}: see-through hole that Sprixen's drawing doesn't have, {int(comp.sum())}px at ({int(xx.mean())},{int(yy.mean())})")
+    # 14. BACKDROP BETWEEN THE BOOTS (runs)
+    if not temporal:
+        for i, f in enumerate(walk):
+            m = boot_gaps(f)
+            if m.sum():
+                yy, xx = np.where(m)
+                fails.append(f"frame {i}: grey backdrop between the legs/boots, {int(m.sum())}px around ({int(xx.mean())},{int(yy.mean())})")
+    # 13. LIGHT HALO JUST INSIDE THE INK LINE (runs): Sprixen's pale soft edge left behind the line
+    if rp and not temporal:
+        for i in range(n):
+            ra = R[:, i * cw:(i + 1) * cw, 3]
+            m, _ = inner_halo(walk[i].astype(float), ra)
+            lab, k = ndimage.label(m, structure=np.ones((3, 3)))
+            for j in range(1, k + 1):
+                comp = lab == j
+                if comp.sum() >= 2:
+                    yy, xx = np.nonzero(comp)
+                    fails.append(f"frame {i}: light halo inside the outline, {int(comp.sum())}px at ({int(xx.mean())},{int(yy.mean())})")
+    # 11. GHOSTING: a frame that looks like two neighbouring frames blended (double face / limbs):
+    #     its face area is much closer to the average of its neighbours than to either one alone
+    for i in range(n):
+        f, p, q = walk[i], walk[i - 1], walk[(i + 1) % n]
+        ys_ = np.where((f[..., 3] > 128).any(1))[0]
+        t0, t1 = ys_.min(), ys_.min() + int(0.22 * (ys_.max() - ys_.min()))
+        A, P, Q = f[t0:t1, :, :3], p[t0:t1, :, :3], q[t0:t1, :, :3]
+        m = (f[t0:t1, :, 3] > 128) & (p[t0:t1, :, 3] > 128) & (q[t0:t1, :, 3] > 128)
+        if m.sum() < 200:
+            continue
+        d_avg = np.abs(A - (P + Q) / 2)[m].mean()
+        d_one = min(np.abs(A - P)[m].mean(), np.abs(A - Q)[m].mean())
+        if d_one > 12 and d_avg < 0.55 * d_one:
+            fails.append(f"frame {i}: face looks like a blend of the frames either side (ghosting)")
     print(f"== shape {name}: {n} frames; collar odd px {min(cc)}-{max(cc)}; outline notch px {min(rough)}-{max(rough)} (standing {ref_notch}); "
           f"edge slivers {min(sl)}-{max(sl)} (standing {ref_sl})")
     for x in fails[:30]:

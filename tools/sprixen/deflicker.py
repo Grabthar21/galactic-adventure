@@ -10,7 +10,9 @@ so the repaired pixels continue the motion instead of blinking. Everything else 
 usage: python3 deflicker.py <walk_strip.png> [out.png]
 """
 import sys
+import os
 import numpy as np
+TOL = int(os.environ.get("MOTION_TOL", "1"))   # px of motion between frames treated as normal (runs move faster)
 from PIL import Image
 from scipy import ndimage
 
@@ -33,8 +35,8 @@ def defects(fr, i):
     out = np.zeros(c.shape[:2], bool)
     for k in range(2):
         P, C, Q = layers(p)[k], layers(c)[k], layers(q)[k]
-        on = ndimage.binary_erosion(P, iterations=1) & ndimage.binary_erosion(Q, iterations=1)
-        off = ~ndimage.binary_dilation(P, iterations=1) & ~ndimage.binary_dilation(Q, iterations=1)
+        on = ndimage.binary_erosion(P, iterations=TOL) & ndimage.binary_erosion(Q, iterations=TOL)
+        off = ~ndimage.binary_dilation(P, iterations=TOL) & ~ndimage.binary_dilation(Q, iterations=TOL)
         for m in (on & ~C, off & C):
             lab, nl = ndimage.label(m & U)
             for j in range(1, nl + 1):
@@ -50,7 +52,7 @@ def defects(fr, i):
             out |= comp                    # filled from the neighbouring frames, like a blink
     dent = np.zeros_like(out)
     Np, Nc, Nq = notches(layers(p)[0]), notches(layers(c)[0]), notches(layers(q)[0])
-    lone = Nc & U & ~ndimage.binary_dilation(Np, iterations=1) & ~ndimage.binary_dilation(Nq, iterations=1)
+    lone = Nc & U & ~ndimage.binary_dilation(Np, iterations=TOL) & ~ndimage.binary_dilation(Nq, iterations=TOL)
     lab, nl = ndimage.label(lone)
     for j in range(1, nl + 1):
         comp = lab == j
@@ -78,7 +80,9 @@ def main():
     fr = [a[:, i * CW:(i + 1) * CW].copy() for i in range(n)]
     out = [f.copy() for f in fr]
     fixed = []
-    for i in range(n):
+    import os as _os
+    temporal = not _os.environ.get("NO_TEMPORAL")   # runs: no blending of neighbouring frames
+    for i in range(n if temporal else 0):
         d, dent = defects(fr, i)
         if dent.any():
             # a one-frame dent: filled in as the smooth outline would have it, in the colour of
@@ -116,7 +120,7 @@ def main():
         w = w[..., None]
         out[i] = fr[i] * (1 - w) + avg * w
         fixed.append(int(d.sum() + dent.sum()))
-    from qa_shape import slivers, torso_slivers, arm_strands, grey_gaps
+    from qa_shape import slivers, torso_slivers, arm_strands, grey_gaps, cuffs, inner_halo, boot_gaps
     import os
     rp = os.environ.get("REF_STRIP")
     refc = None
@@ -150,7 +154,7 @@ def main():
         f = out[i]
         # light specks sticking out of the hair line / head edge: take the colour of the dark
         # (hair / outline) pixels around them
-        sp = slivers(f)
+        sp = slivers(f, 1 if temporal else 2)
         s_ = f[..., 3] > 128
         ys_ = np.where(s_.any(1))[0]
         crown = np.zeros_like(s_)
@@ -159,6 +163,8 @@ def main():
         ts = torso_slivers(f)
         f[ts] = 0                          # backdrop strand under the arm: cleared
         st = arm_strands(f) | grey_gaps(f)
+        if not temporal:
+            st &= ~cuffs(f, st)
         if st.any():
             # backdrop in the gap between forearm/glove and body: where the gap is open to the
             # outside it becomes see-through again; a closed sliver becomes the dark line colour
@@ -169,8 +175,18 @@ def main():
             shirt_ = (f[..., 3] > 128) & (rgbf.min(2) > 175) & (rgbf[..., 0] >= rgbf[..., 2]) & ~st
             skin_ = (f[..., 3] > 128) & (rgbf[..., 0] > 190) & (rgbf[..., 1] > 120) & (rgbf[..., 0] - rgbf[..., 2] > 55)
             ref_white = np.median(rgbf[shirt_], 0) if shirt_.sum() > 20 else np.array([235, 228, 218], np.float32)
+            if not temporal:
+                # outside the ink line: light pixels reachable from the background without
+                # crossing a dark line pixel are matte fringe, not sleeve (runs)
+                dark_ = (f[..., 3] > 128) & (rgbf.mean(2) < 110)
+                reach_, _n = ndimage.label(~dark_)
+                bl_ = set(np.unique(np.concatenate([reach_[0], reach_[-1], reach_[:, 0], reach_[:, -1]]))) - {0}
+                outside_ = np.isin(reach_, list(bl_))
             for j_ in range(1, k_ + 1):
                 c_ = lab_ == j_
+                if not temporal and (c_ & outside_).sum() > 0.5 * c_.sum():
+                    f[c_] = 0
+                    continue
                 ring_ = ndimage.binary_dilation(c_, iterations=2) & ~c_
                 if (ring_ & shirt_).sum() >= 3 and (ring_ & skin_).sum() >= 1 and not (c_ & out_).sum() > 0.5 * c_.sum():
                     # the far sleeve, drawn half see-through by Sprixen: painted as sleeve (shirt
@@ -184,6 +200,23 @@ def main():
                     f[c_] = 0
                 else:
                     fill(f, c_, i)
+        if not temporal:
+            # backdrop between the boots: see-through where it opens to the outside, else the
+            # dark line colour (two outlines meeting)
+            bg = boot_gaps(f)
+            if bg.any():
+                lab_, k_ = ndimage.label(bg, structure=np.ones((3, 3)))
+                open_ = ndimage.binary_dilation(f[..., 3] < 30, iterations=2)
+                for j_ in range(1, k_ + 1):
+                    c_ = lab_ == j_
+                    if (c_ & open_).sum() >= 0.3 * c_.sum():
+                        f[c_] = 0
+                    else:
+                        f[c_, :3] = LINE
+                        f[c_, 3] = 255
+        if not temporal and refc is not None:
+            hm, col = inner_halo(f, refc[i][..., 3])
+            f[hm, :3] = col[hm]
         if sp.any():
             lum = f[..., :3].mean(2)
             dk = (f[..., 3] > 128) & (lum < 120)
