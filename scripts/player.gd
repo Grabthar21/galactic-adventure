@@ -14,6 +14,8 @@ const SIDE_WALK_FPS_BY_HERO := {"arthur": 36.0}
 const WALK_FPS_BY_DIR := {"down": 37.5, "up": 30.0}   # 30- and 24-frame loops -> 0.8 s per two steps, same cadence as the side walk
 const IDLE_SIDE_FPS := 12.0     # 32-frame breathing loops (tools/sprixen/breathe.py) = ~2.7 s per calm breath
 var walk_speed := SPEED
+const RUN_MULT := 1.8           # holding Run (Shift): speed x1.8; run strips' fps come from art/<hero>_anims.json
+var running := false
 const ROLL_DIST := 105.0      # about one character height at gameplay scale
 const ROLL_TIME := 0.32
 const ROLL_COOLDOWN := 0.15
@@ -92,6 +94,9 @@ func setup(hero: String) -> void:
 		_add_anim(frames, tex, "walk_down", front_back_order.map(func(c): return [2, c]), 8.0)
 	if not _add_strip(frames, "walk_up", "res://art/%s_up_walk.png" % look, _fps(anims, "walk_up", WALK_FPS_BY_DIR.up)):
 		_add_anim(frames, tex, "walk_up", front_back_order.map(func(c): return [3, c]), 8.0)
+	# Run strips (tools/sprixen, art/<hero>_<side|down|up>_run.png); optional
+	for d in ["side", "down", "up"]:
+		_add_strip(frames, "run_" + d, "res://art/%s_%s_run.png" % [look, d], _fps(anims, "run_" + d, 30.0))
 	if not _add_strip(frames, "idle_up", "res://art/%s_up_idle.png" % look, _fps(anims, "idle_up", IDLE_SIDE_FPS)):
 		_add_anim(frames, tex, "idle_up", [[3, 0]], 1.0)
 	var side_path := "res://art/%s_side_walk.png" % (look if hero == base else hero)
@@ -268,7 +273,8 @@ func _physics_process(delta: float) -> void:
 
 	match state:
 		"move":
-			velocity = input * walk_speed
+			running = controllable and Input.is_action_pressed("run") and input.length() > 0.1
+			velocity = input * walk_speed * (RUN_MULT if running else 1.0)
 			if input.length() > 0.1:
 				facing = input.normalized()
 			if controllable and weapon != "" and Input.is_action_just_pressed("attack"):
@@ -357,10 +363,16 @@ func _update_anim() -> void:
 		sprite.flip_h = false
 	var moving := velocity.length() > 20.0 and state == "move"
 	var anim := ("walk_" if moving or state == "roll" else "idle_") + anim_dir
+	var base_speed := walk_speed
+	if moving and running:
+		if sprite.sprite_frames.has_animation("run_" + anim_dir):
+			anim = "run_" + anim_dir
+			base_speed = walk_speed * RUN_MULT
+		# (no run strip yet: the walk plays faster below)
 	if sprite.animation != anim:
 		sprite.play(anim)
 	# legs keep pace with actual speed (e.g. a half-pushed stick walks slower, not skating)
-	sprite.speed_scale = clampf(velocity.length() / walk_speed, 0.5, 1.5) if moving else 1.0
+	sprite.speed_scale = clampf(velocity.length() / base_speed, 0.5, 2.0) if moving else 1.0
 
 
 func _draw_fx() -> void:

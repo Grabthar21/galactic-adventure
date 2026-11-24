@@ -123,58 +123,63 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
         base_h = str(body_h[v] if body_h else d["prof"]["HEIGHT"])
         head_px = round((d["prof"]["CHIN_CUT"] - d["prof"]["HEAD_TOP"]) / d["prof"]["HEIGHT"] * H * K)
 
-        # ---- walk
-        raw = os.path.join(cdir, cfg["walks"][direction]["raw"])
-        loop = os.path.join(w, f"{direction}_loop.png")
-        out = run("find_loop.py", raw, loop, 16, 44).stdout.strip()
-        frames = Image.open(loop).width // 256
-        sc = os.path.join(w, f"{direction}_scaled.png")
-        # the raw walk shows the approved head, so scale/locate against the approved drawing
-        loc_base = locate_bases[v] if locate_bases else d["base"]
-        loc_prof = json.dumps({k: head_rows(loc_base)[k] for k in ("HEAD_TOP", "BROW", "CHIN_CUT", "FACE")})
-        run("match_scale.py", loop, loc_base, sc, loc_prof)
-        lk = os.path.join(w, f"{direction}_locked.png")
-        if head_lock:
-            run("lock_head.py", sc, d["base"], lk, 2, 0, prof,
-                env={"LOCATE_BASE": loc_base} if locate_bases else None)
-        else:   # Sprixen's own head (turns with the body, hair moves); only the matte is cleaned
-            # geometry (head size, bob, leg length, placement) is measured on the sheet WITHOUT the
-            # collar repair, so colour/outline fixes never move anything
-            geo = os.path.join(w, f"{direction}_geom.png")
-            run("clean_sheet.py", sc, geo, "--gentle")
-            run("clean_sheet.py", sc, lk, "--gentle")
-            geo2 = geo.replace(".png", "_h.png")
-            print(run("match_head.py", geo, d["base"], geo2, prof).stdout.strip())   # approved head size
-            run("match_head.py", lk, d["base"], lk, prof, env={"GEOM_SHEET": geo})
-            geo3 = geo.replace(".png", "_l.png")
-            run("match_legs.py", geo2, d["base"], geo3, prof)
-            run("match_legs.py", lk, d["base"], lk, prof, env={"GEOM_SHEET": geo2})
-        if head_lock:
-            print(run("match_legs.py", lk, d["base"], lk, prof).stdout.strip())   # never taller walking than standing
-        if cfg.get("fix_gloves"):
-            run("fix_gloves.py", lk, lk)
-        if d["clean"] != ref:
-            run("skin_match.py", ref, lk, lk)
-        if not head_lock:   # Sprixen-style: give every frame the approved drawing's outline
-            print(run("ink_outline.py", lk, d["base"], lk,
-                      env={"OUTLINE_WEIGHT": str(cfg.get("style", {}).get("outline_weight", 1))}).stdout.strip())
-        fps = round(frames / cycle, 2)
-        strip = os.path.join(ART, f"{prefix}_{direction}_walk.png")
-        run("build_walk_strip.py", lk, strip, H, fps,
-            env={"BASE_H": base_h, **({} if head_lock else {"PLACE_FROM": geo3})})
-        if not head_lock:
-            # reference: Sprixen's own frames with the same geometry and no clean-up (qa_fidelity.py)
-            rf = os.path.join(w, f"{direction}_ref.png")
-            run("match_head.py", sc, d["base"], rf, prof, env={"GEOM_SHEET": geo})
-            run("match_legs.py", rf, d["base"], rf, prof, env={"GEOM_SHEET": geo2})
-            refs[direction] = os.path.join(w, f"{direction}_ref_strip.png")
-            run("build_walk_strip.py", rf, refs[direction], H, fps,
-                env={"BASE_H": base_h, "PLACE_FROM": geo3, "REINK": "0"})
-        if not head_lock and direction == "side":
-            pass   # the near-glove size is matched after the idle strip exists (below)
-        run("masks.py", strip, strip.replace(".png", "_mask.png"), head_px)   # skin/hair for recolouring
-        manifest[f"walk_{direction}"] = {"frames": frames, "fps": fps}
-        print(f"walk_{direction}: {out}")
+        strips = {}
+        for kind, moves in (("walk", cfg["walks"]), ("run", cfg.get("runs", {}))):
+            if direction not in moves:
+                continue
+            # ---- walk
+            raw = os.path.join(cdir, moves[direction]["raw"])
+            loop = os.path.join(w, f"{direction}_{kind}_loop.png")
+            out = run("find_loop.py", raw, loop, *((16, 44) if kind == "walk" else (10, 40))).stdout.strip()
+            frames = Image.open(loop).width // 256
+            sc = os.path.join(w, f"{direction}_{kind}_scaled.png")
+            # the raw walk shows the approved head, so scale/locate against the approved drawing
+            loc_base = locate_bases[v] if locate_bases else d["base"]
+            loc_prof = json.dumps({k: head_rows(loc_base)[k] for k in ("HEAD_TOP", "BROW", "CHIN_CUT", "FACE")})
+            run("match_scale.py", loop, loc_base, sc, loc_prof)
+            lk = os.path.join(w, f"{direction}_{kind}_locked.png")
+            if head_lock:
+                run("lock_head.py", sc, d["base"], lk, 2, 0, prof,
+                    env={"LOCATE_BASE": loc_base} if locate_bases else None)
+            else:   # Sprixen's own head (turns with the body, hair moves); only the matte is cleaned
+                # geometry (head size, bob, leg length, placement) is measured on the sheet WITHOUT the
+                # collar repair, so colour/outline fixes never move anything
+                geo = os.path.join(w, f"{direction}_{kind}_geom.png")
+                run("clean_sheet.py", sc, geo, "--gentle")
+                run("clean_sheet.py", sc, lk, "--gentle")
+                geo2 = geo.replace(".png", "_h.png")
+                print(run("match_head.py", geo, d["base"], geo2, prof).stdout.strip())   # approved head size
+                run("match_head.py", lk, d["base"], lk, prof, env={"GEOM_SHEET": geo})
+                geo3 = geo.replace(".png", "_l.png")
+                run("match_legs.py", geo2, d["base"], geo3, prof)
+                run("match_legs.py", lk, d["base"], lk, prof, env={"GEOM_SHEET": geo2})
+            if head_lock:
+                print(run("match_legs.py", lk, d["base"], lk, prof).stdout.strip())   # never taller walking than standing
+            if cfg.get("fix_gloves"):
+                run("fix_gloves.py", lk, lk)
+            if d["clean"] != ref:
+                run("skin_match.py", ref, lk, lk)
+            if not head_lock:   # Sprixen-style: give every frame the approved drawing's outline
+                print(run("ink_outline.py", lk, d["base"], lk,
+                          env={"OUTLINE_WEIGHT": str(cfg.get("style", {}).get("outline_weight", 1))}).stdout.strip())
+            fps = round(frames / (cycle if kind == "walk" else cfg.get("run_cycle_seconds", 0.55)), 2)
+            strip = os.path.join(ART, f"{prefix}_{direction}_{kind}.png")
+            run("build_walk_strip.py", lk, strip, H, fps,
+                env={"BASE_H": base_h, **({} if head_lock else {"PLACE_FROM": geo3})})
+            if not head_lock:
+                # reference: Sprixen's own frames with the same geometry and no clean-up (qa_fidelity.py)
+                rf = os.path.join(w, f"{direction}_{kind}_ref.png")
+                run("match_head.py", sc, d["base"], rf, prof, env={"GEOM_SHEET": geo})
+                run("match_legs.py", rf, d["base"], rf, prof, env={"GEOM_SHEET": geo2})
+                refs[(direction, kind)] = os.path.join(w, f"{direction}_{kind}_ref_strip.png")
+                run("build_walk_strip.py", rf, refs[(direction, kind)], H, fps,
+                    env={"BASE_H": base_h, "PLACE_FROM": geo3, "REINK": "0"})
+            if not head_lock and direction == "side":
+                pass   # the near-glove size is matched after the idle strip exists (below)
+            run("masks.py", strip, strip.replace(".png", "_mask.png"), head_px)   # skin/hair for recolouring
+            manifest[f"{kind}_{direction}"] = {"frames": frames, "fps": fps}
+            strips[kind] = strip
+            print(f"{kind}_{direction}: {out}")
 
         # ---- idle (the approved drawing, breathing)
         br = os.path.join(w, f"{direction}_breath.png")
@@ -184,18 +189,20 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
         run("build_idle_strip.py", br, istrip, H, env={"BASE_H": base_h})
         run("masks.py", istrip, istrip.replace(".png", "_mask.png"), head_px)
         manifest[f"idle_{direction}"] = {"frames": n_idle, "fps": idle.get("fps", 12)}
-        if not head_lock:
+        for kind, strip in strips.items():
+          if not head_lock:
+            rfp = refs[(direction, kind)]
             if direction == "side":
                 # near hand: one size in every walk frame, measured from the approved standing drawing
                 print(run("match_glove.py", strip, istrip).stdout.strip())
             # one-frame blinks / dents in the upper body (what qa_shape.py checks), two passes
             for _ in range(3):
-                print(run("deflicker.py", strip, env={"REF_STRIP": refs.get(direction, "")} if not head_lock else None).stdout.strip())
-            print(run("qa_fidelity.py", strip, refs[direction], "--fix").stdout.strip())
-            print(run("deflicker.py", strip, env={"REF_STRIP": refs.get(direction, "")} if not head_lock else None).stdout.strip())
-            print(run("deflicker.py", strip, env={"REF_STRIP": refs.get(direction, "")} if not head_lock else None).stdout.strip())
-            print(run("qa_fidelity.py", strip, refs[direction], "--fix").stdout.strip())
-            print(run("deflicker.py", strip, env={"REF_STRIP": refs.get(direction, "")} if not head_lock else None).stdout.strip())
+                print(run("deflicker.py", strip, env={"REF_STRIP": rfp}).stdout.strip())
+            print(run("qa_fidelity.py", strip, rfp, "--fix").stdout.strip())
+            print(run("deflicker.py", strip, env={"REF_STRIP": rfp}).stdout.strip())
+            print(run("deflicker.py", strip, env={"REF_STRIP": rfp}).stdout.strip())
+            print(run("qa_fidelity.py", strip, rfp, "--fix").stdout.strip())
+            print(run("deflicker.py", strip, env={"REF_STRIP": rfp}).stdout.strip())
             run("masks.py", strip, strip.replace(".png", "_mask.png"), head_px)
         if direction == "side" and extra_idles:
             for x in cfg.get("extra_idles", []):
@@ -235,23 +242,25 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
     # ---- QA
     ok = True
     for direction in ("side", "down", "up"):
-        for kind in ("walk", "idle"):
+        for kind in ("walk", "idle", "run"):
+            if kind == "run" and direction not in cfg.get("runs", {}):
+                continue
             r = run("qa_strip.py", os.path.join(ART, f"{prefix}_{direction}_{kind}.png"),
-                    f"{prefix}_{direction}_{kind}", round(H * K), kind)
+                    f"{prefix}_{direction}_{kind}", round(H * K), "idle" if kind == "idle" else "walk")
             for line in r.stdout.splitlines():
                 if line.startswith("==") or "FAIL" in line or "RESULT" in line:
                     print(line)
             ok &= r.returncode == 0
     if not cfg.get("style", {}).get("head_lock", True):
-        for direction in ("side", "down", "up"):
-            r = run("qa_fidelity.py", os.path.join(ART, f"{prefix}_{direction}_walk.png"),
-                    refs[direction], f"{prefix}_{direction}_walk")
+        for direction, kind in refs:
+            r = run("qa_fidelity.py", os.path.join(ART, f"{prefix}_{direction}_{kind}.png"),
+                    refs[(direction, kind)], f"{prefix}_{direction}_{kind}")
             for line in r.stdout.splitlines():
                 if line.startswith("==") or "FAIL" in line or "RESULT" in line:
                     print(line)
             ok &= r.returncode == 0
-            r = run("qa_shape.py", os.path.join(ART, f"{prefix}_{direction}_walk.png"),
-                    os.path.join(ART, f"{prefix}_{direction}_idle.png"), f"{prefix}_{direction}_walk")
+            r = run("qa_shape.py", os.path.join(ART, f"{prefix}_{direction}_{kind}.png"),
+                    os.path.join(ART, f"{prefix}_{direction}_idle.png"), f"{prefix}_{direction}_{kind}")
             for line in r.stdout.splitlines():
                 if line.startswith("==") or "FAIL" in line or "RESULT" in line:
                     print(line)
@@ -259,8 +268,8 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
     r = run("qa_cross.py", prefix)
     print(r.stdout.strip())
     ok &= r.returncode == 0
-    for direction, rp in refs.items():          # kept for inspection
-        shutil.copy(rp, f"/tmp/ref_{prefix}_{direction}.png")
+    for (direction, kind), rp in refs.items():          # kept for inspection
+        shutil.copy(rp, f"/tmp/ref_{prefix}_{direction}" + ("" if kind == "walk" else "_" + kind) + ".png")
     shutil.rmtree(w, ignore_errors=True)
     return ok
 
