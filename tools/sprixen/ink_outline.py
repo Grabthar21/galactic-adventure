@@ -52,6 +52,13 @@ def ink(f, col, col_l):
         head = np.zeros_like(solid)
         head[:ys.min() + int(0.21 * (ys.max() - ys.min()))] = True
         need[head & (rgb.min(2) > 175)] = 0
+        # brow to chin: the far eye sits on the face's edge; Sprixen's own line is kept there and
+        # nothing is added (inking it smudged the eye into a dark blob)
+        face = np.zeros_like(solid)
+        face[ys.min() + int(0.07 * (ys.max() - ys.min())):ys.min() + int(0.21 * (ys.max() - ys.min()))] = True
+        # only around the eyes themselves (their whites and 4 px round them); ears and cheeks are inked
+        eyes = ndimage.binary_dilation(face & solid & (rgb.min(2) > 175), iterations=4)
+        need[face & eyes] = 0
     k = (w * need)[:, :, None]
     out = f.copy()
     out[:, :, :3] = rgb * (1 - k) + col[None, None, :] * k

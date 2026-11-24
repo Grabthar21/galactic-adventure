@@ -115,6 +115,7 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
             run("skin_match.py", ref, d["clean"], d["clean"])
 
     manifest, results = {}, []
+    refs = {}
     for direction in ("side", "down", "up"):
         v = DIR_VIEW[direction]
         d = views[v]
@@ -161,6 +162,14 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
         strip = os.path.join(ART, f"{prefix}_{direction}_walk.png")
         run("build_walk_strip.py", lk, strip, H, fps,
             env={"BASE_H": base_h, **({} if head_lock else {"PLACE_FROM": geo3})})
+        if not head_lock:
+            # reference: Sprixen's own frames with the same geometry and no clean-up (qa_fidelity.py)
+            rf = os.path.join(w, f"{direction}_ref.png")
+            run("match_head.py", sc, d["base"], rf, prof, env={"GEOM_SHEET": geo})
+            run("match_legs.py", rf, d["base"], rf, prof, env={"GEOM_SHEET": geo2})
+            refs[direction] = os.path.join(w, f"{direction}_ref_strip.png")
+            run("build_walk_strip.py", rf, refs[direction], H, fps,
+                env={"BASE_H": base_h, "PLACE_FROM": geo3, "REINK": "0"})
         if not head_lock and direction == "side":
             pass   # the near-glove size is matched after the idle strip exists (below)
         run("masks.py", strip, strip.replace(".png", "_mask.png"), head_px)   # skin/hair for recolouring
@@ -181,7 +190,12 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
                 print(run("match_glove.py", strip, istrip).stdout.strip())
             # one-frame blinks / dents in the upper body (what qa_shape.py checks), two passes
             for _ in range(3):
-                print(run("deflicker.py", strip).stdout.strip())
+                print(run("deflicker.py", strip, env={"REF_STRIP": refs.get(direction, "")} if not head_lock else None).stdout.strip())
+            print(run("qa_fidelity.py", strip, refs[direction], "--fix").stdout.strip())
+            print(run("deflicker.py", strip, env={"REF_STRIP": refs.get(direction, "")} if not head_lock else None).stdout.strip())
+            print(run("deflicker.py", strip, env={"REF_STRIP": refs.get(direction, "")} if not head_lock else None).stdout.strip())
+            print(run("qa_fidelity.py", strip, refs[direction], "--fix").stdout.strip())
+            print(run("deflicker.py", strip, env={"REF_STRIP": refs.get(direction, "")} if not head_lock else None).stdout.strip())
             run("masks.py", strip, strip.replace(".png", "_mask.png"), head_px)
         if direction == "side" and extra_idles:
             for x in cfg.get("extra_idles", []):
@@ -230,6 +244,12 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
             ok &= r.returncode == 0
     if not cfg.get("style", {}).get("head_lock", True):
         for direction in ("side", "down", "up"):
+            r = run("qa_fidelity.py", os.path.join(ART, f"{prefix}_{direction}_walk.png"),
+                    refs[direction], f"{prefix}_{direction}_walk")
+            for line in r.stdout.splitlines():
+                if line.startswith("==") or "FAIL" in line or "RESULT" in line:
+                    print(line)
+            ok &= r.returncode == 0
             r = run("qa_shape.py", os.path.join(ART, f"{prefix}_{direction}_walk.png"),
                     os.path.join(ART, f"{prefix}_{direction}_idle.png"), f"{prefix}_{direction}_walk")
             for line in r.stdout.splitlines():
@@ -239,6 +259,8 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
     r = run("qa_cross.py", prefix)
     print(r.stdout.strip())
     ok &= r.returncode == 0
+    for direction, rp in refs.items():          # kept for inspection
+        shutil.copy(rp, f"/tmp/ref_{prefix}_{direction}.png")
     shutil.rmtree(w, ignore_errors=True)
     return ok
 

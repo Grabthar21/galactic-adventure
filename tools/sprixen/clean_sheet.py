@@ -182,11 +182,27 @@ def clean_gentle(f):
                 solid |= hm
     # inside the body (2+ px from the outside) everything is solid: the far arm is see-through in Sprixen
     inner = ndimage.binary_erosion(a > 60, iterations=2)
+    # half see-through pale pixels (Sprixen's backdrop showing between hair tufts or limbs) are not
+    # made solid: near the outside they are cleared, deeper in they take the surrounding colour
+    sat0 = rgb.max(2) - rgb.min(2)
+    pale_semi = inner & (a < 200) & (rgb.min(2) > 150) & (sat0 < 50)
+    if pale_semi.any():
+        near_out = ndimage.binary_dilation(a < 60, iterations=3)
+        a[pale_semi & near_out] = 0
+        deep = pale_semi & ~near_out
+        if deep.any():
+            good = (a >= 200) & ~pale_semi
+            _, (gy, gx) = ndimage.distance_transform_edt(~good, return_indices=True)
+            rgb = rgb.copy()
+            rgb[deep] = rgb[gy[deep], gx[deep]]
+        inner &= ~(pale_semi & near_out)
     a[inner] = 255
     # pale bluish-white patches next to the outside are Sprixen's old backdrop showing in the gaps
     # between arm and body (the shirt is a warm white, never bluish): cleared
     outside = a == 0
-    coolw = (a > 0) & (rgb.min(2) > 150) & (rgb[:, :, 2] >= rgb[:, :, 0] + 3)
+    # (low colour only: the neckerchief's light-blue highlights are part of the drawing)
+    coolw = (a > 0) & (rgb.min(2) > 150) & (rgb[:, :, 2] >= rgb[:, :, 0] + 3) \
+        & (rgb.max(2) - rgb.min(2) < 30)
     lab, nl = ndimage.label(coolw)
     if nl:
         near_out = ndimage.binary_dilation(outside, iterations=3)
@@ -198,8 +214,8 @@ def clean_gentle(f):
             comp = lab == k
             if np.where(comp)[0].mean() < head_end:
                 continue                                              # eyes etc.
-            if (comp & near_out).any() or (comp & gaps).sum() >= 0.6 * comp.sum():
-                a[comp] = 0
+            if (comp & near_out).any() or ((comp & gaps).sum() >= 0.6 * comp.sum() and comp.sum() >= 40):
+                a[comp] = 0          # small enclosed bits are highlights (neckerchief), kept
     # below the belt nothing in the outfit is white (gloves, trousers, boots; the buckle is gold):
     # light, colourless pixels there are the old backdrop between arm, hip and legs -> cleared
     navy = (a >= 200) & (rgb[:, :, 2] > rgb[:, :, 0] + 8) & (rgb[:, :, 0] < 110)
@@ -210,14 +226,22 @@ def clean_gentle(f):
     if len(rows):
         belt = rows.min()
         sat = rgb.max(2) - rgb.min(2)
-        pale = (a > 0) & (rgb.min(2) > 150) & (sat < 40)
+        pale = (a > 0) & (rgb.min(2) > 130) & (sat < 45)
         pale[:belt] = False
         lab, nl = ndimage.label(pale)
         near_out = ndimage.binary_dilation(a == 0, iterations=3)
         for k in range(1, nl + 1):
             comp = lab == k
-            if (comp & near_out).any() or comp.sum() <= 30:
-                a[comp] = 0
+            if (comp & near_out).any() or comp.sum() >= 40:
+                a[comp] = 0          # backdrop open to the outside, or a real gap between arm and hip / legs
+            else:
+                # a sliver of backdrop where arm and hip (or the legs) touch: take the colour of
+                # what is around it, so it neither shows white nor turns into a see-through speck
+                keep = (a >= 200) & ~pale
+                _, (iy, ix) = ndimage.distance_transform_edt(~keep, return_indices=True)
+                rgb = rgb.copy()
+                rgb[comp] = rgb[iy[comp], ix[comp]]
+                a[comp] = 255
     # thin wisps on the outline (1-2 px strands of half see-through hair or collar behind the neck):
     # they come and go between frames and turn into dark hooks once the outline is inked. Anything
     # an opening with a 3x3 square removes, in pieces under 30 px, is dropped.
@@ -272,6 +296,9 @@ def clean_gentle(f):
     out = f.copy()
     out[:, :, :3] = rgb
     edge = (a > 0) & (a < 245)
+    # only edge pixels the old backdrop lightened take the inner colour; Sprixen's dark line stays
+    lighter = rgb.mean(2) > rgb[iy, ix].mean(2) + 15
+    edge &= lighter
     out[edge, :3] = rgb[iy[edge], ix[edge]]
     out[:, :, 3] = a
     out[a == 0, :3] = 0
