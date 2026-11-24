@@ -14,11 +14,18 @@ const SIDE_WALK_FPS_BY_HERO := {"arthur": 36.0}
 const WALK_FPS_BY_DIR := {"down": 37.5, "up": 30.0}   # 30- and 24-frame loops -> 0.8 s per two steps, same cadence as the side walk
 const IDLE_SIDE_FPS := 12.0     # 32-frame breathing loops (tools/sprixen/breathe.py) = ~2.7 s per calm breath
 var walk_speed := SPEED
-const RUN_MULT := 1.8           # holding Run (Shift): speed x1.8; run strips' fps come from art/<hero>_anims.json
+const RUN_MULT := 1.8           # run speed = walk speed x1.8; run strips' fps come from art/<hero>_anims.json
+# Default way of moving. "run" (the family's choice, 24 Nov): the run strips at walk_speed x RUN_MULT.
+# "walk" is kept in the back pocket: the walk strips at walk_speed. Falls back to walking if a
+# hero has no run strips yet.
+const DEFAULT_GAIT := "run"
 var running := false
-const ROLL_DIST := 105.0      # about one character height at gameplay scale
-const ROLL_TIME := 0.32
-const ROLL_COOLDOWN := 0.15
+# Dodge roll (Space / gamepad A): a short burst a little faster than running. Enemy attacks miss
+# during the roll's i-frames; walls stop it like normal movement (move_and_slide, wall layer 1).
+const ROLL_SPEED_MULT := 1.25   # roll speed = run speed x1.25 (~268 px/s)
+const ROLL_DIST := 96.0         # about 0.85 of Arthur's on-screen height
+const ROLL_IFRAMES := 0.30      # invulnerable for the first 0.30 s; the last ~0.06 s (getting up) is not
+const ROLL_COOLDOWN := 0.25
 const CELL := Vector2(98, 148) # frame size in the prepared sheets
 const SCALE := 0.75
 # strips from tools/sprixen may be drawn larger than the 98x148 cells (the smooth Sprixen-style
@@ -42,6 +49,7 @@ var roll_t := 0.0
 var roll_cd := 0.0
 var roll_vec := Vector2.ZERO
 var invuln_t := 0.0
+var roll_time := 0.36           # set in _ready from ROLL_DIST and the roll speed
 var hurt_t := 0.0
 var knock := Vector2.ZERO
 
@@ -75,6 +83,7 @@ func setup(hero: String) -> void:
 	var base := "arthur" if hero == "arthur_v2" else hero
 	var tex: Texture2D = load("res://art/%s_frames.png" % base)
 	walk_speed = SPEED_V2 if hero == "arthur_v2" else SPEED
+	roll_time = ROLL_DIST / (walk_speed * RUN_MULT * ROLL_SPEED_MULT)
 	var frames := SpriteFrames.new()
 	frames.remove_animation("default")
 	# Hairstyle: tools/sprixen builds a full strip set per style as art/<hero>__<style>_*
@@ -101,6 +110,12 @@ func setup(hero: String) -> void:
 		if anims.has("run_" + d) and anims["run_" + d] is Dictionary and anims["run_" + d].has("cell_w"):
 			rw = float(anims["run_" + d]["cell_w"])
 		_add_strip(frames, "run_" + d, "res://art/%s_%s_run.png" % [look, d], _fps(anims, "run_" + d, 30.0), rw)
+		# Roll strips (optional): played once per dodge, timed to last exactly roll_time
+		var key: String = "roll_" + d
+		var cw := float(anims[key]["cell_w"]) if anims.has(key) and anims[key] is Dictionary and anims[key].has("cell_w") else rw
+		if _add_strip(frames, key, "res://art/%s_%s_roll.png" % [look, d], 30.0, cw):
+			frames.set_animation_speed(key, frames.get_frame_count(key) / roll_time)
+			frames.set_animation_loop(key, false)
 	if not _add_strip(frames, "idle_up", "res://art/%s_up_idle.png" % look, _fps(anims, "idle_up", IDLE_SIDE_FPS)):
 		_add_anim(frames, tex, "idle_up", [[3, 0]], 1.0)
 	var side_path := "res://art/%s_side_walk.png" % (look if hero == base else hero)
@@ -246,7 +261,7 @@ func heal_full() -> void:
 
 
 func is_invulnerable() -> bool:
-	return state == "roll" or invuln_t > 0.0 or state == "dead"
+	return (state == "roll" and roll_t < ROLL_IFRAMES) or invuln_t > 0.0 or state == "dead"
 
 
 func damage_value() -> int:
@@ -279,7 +294,8 @@ func _physics_process(delta: float) -> void:
 
 	match state:
 		"move":
-			running = controllable and Input.is_action_pressed("run") and input.length() > 0.1
+			running = DEFAULT_GAIT == "run" and input.length() > 0.1 and sprite.sprite_frames != null \
+				and sprite.sprite_frames.has_animation("run_" + anim_dir)
 			velocity = input * walk_speed * (RUN_MULT if running else 1.0)
 			if input.length() > 0.1:
 				facing = input.normalized()
@@ -306,9 +322,10 @@ func _physics_process(delta: float) -> void:
 			fx.queue_redraw()
 		"roll":
 			roll_t += delta
-			velocity = roll_vec * (ROLL_DIST / ROLL_TIME)
-			sprite.rotation = (roll_t / ROLL_TIME) * TAU * (1.0 if roll_vec.x >= 0.0 else -1.0)
-			if roll_t >= ROLL_TIME:
+			velocity = roll_vec * (ROLL_DIST / roll_time)
+			if not _has_roll_art():   # placeholder until the roll strips exist: spin the sprite
+				sprite.rotation = (roll_t / roll_time) * TAU * (1.0 if roll_vec.x >= 0.0 else -1.0)
+			if roll_t >= roll_time:
 				state = "move"
 				sprite.rotation = 0.0
 				roll_cd = ROLL_COOLDOWN
@@ -324,7 +341,7 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	_update_anim()
-	sprite.modulate.a = 0.75 if state == "roll" else (0.35 if (invuln_t > 0.0 and int(invuln_t * 14.0) % 2 == 0) else 1.0)
+	sprite.modulate.a = 0.75 if (state == "roll" and not _has_roll_art()) else (0.35 if (invuln_t > 0.0 and int(invuln_t * 14.0) % 2 == 0) else 1.0)
 
 
 func _start_attack(n: int) -> void:
@@ -344,6 +361,14 @@ func _start_roll(input: Vector2) -> void:
 	combo = 0
 	roll_vec = input.normalized() if input.length() > 0.1 else facing
 	facing = roll_vec
+	_update_anim()
+	if _has_roll_art():
+		sprite.frame = 0
+		sprite.play()
+
+
+func _has_roll_art() -> bool:
+	return sprite.sprite_frames != null and sprite.sprite_frames.has_animation("roll_" + anim_dir)
 
 
 func _apply_hit() -> void:
@@ -370,11 +395,15 @@ func _update_anim() -> void:
 	var moving := velocity.length() > 20.0 and state == "move"
 	var anim := ("walk_" if moving or state == "roll" else "idle_") + anim_dir
 	var base_speed := walk_speed
-	if moving and running:
-		if sprite.sprite_frames.has_animation("run_" + anim_dir):
-			anim = "run_" + anim_dir
-			base_speed = walk_speed * RUN_MULT
-		# (no run strip yet: the walk plays faster below)
+	if (moving or state == "roll") and DEFAULT_GAIT == "run" and sprite.sprite_frames.has_animation("run_" + anim_dir):
+		anim = "run_" + anim_dir
+		base_speed = walk_speed * RUN_MULT
+	if state == "roll" and _has_roll_art():
+		anim = "roll_" + anim_dir    # one roll per dodge: its fps is set so it lasts roll_time
+		if sprite.animation != anim:
+			sprite.play(anim)
+		sprite.speed_scale = 1.0
+		return
 	if sprite.animation != anim:
 		sprite.play(anim)
 	# legs keep pace with actual speed (e.g. a half-pushed stick walks slower, not skating)

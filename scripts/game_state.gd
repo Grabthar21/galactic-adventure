@@ -41,8 +41,6 @@ func _ready() -> void:
 	_add_action("attack", [KEY_J], [MOUSE_BUTTON_LEFT], [], [JOY_BUTTON_X])
 	# Dodge roll: Space; gamepad A (Xbox) / Cross (PlayStation)  [confirmed binding]
 	_add_action("dodge", [KEY_SPACE], [], [], [JOY_BUTTON_A])
-	# Run: hold Shift (PC for now; a gamepad button can be added later)
-	_add_action("run", [KEY_SHIFT], [], [], [])
 	# Interact / talk: E or Enter; gamepad B (Xbox) / Circle (PlayStation)
 	_add_action("interact", [KEY_E, KEY_ENTER, KEY_KP_ENTER], [], [], [JOY_BUTTON_B])
 

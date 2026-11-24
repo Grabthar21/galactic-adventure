@@ -109,10 +109,11 @@ func _combat_checks() -> void:
 	ok("no damage while rolling", p.hp == hp_before)
 	for i in 30: await physics_frame
 	var dist: float = start.distance_to(p.global_position)
-	ok("roll distance about one character height (~105px)", dist > 80.0 and dist < 125.0, "%.0fpx" % dist)
+	ok("roll distance short (~96px)", dist > 80.0 and dist < 112.0, "%.0fpx" % dist)
 	p.invuln_t = 0.0
 	p.take_hit(1, p.global_position + Vector2(20, 0))
 	ok("hit lands when not rolling", p.hp == hp_before - 1, "hp %d -> %d" % [hp_before, p.hp])
+	await _roll_checks(p, wolves)
 	# lunge telegraph + contact damage
 	var w2 = wolves[1]
 	w2.set_physics_process(true)
@@ -133,3 +134,80 @@ func _combat_checks() -> void:
 		await process_frame; guard2 += 1
 	ok("respawn restores health", p.hp == p.max_hp)
 	ok("respawn resets wolves", get_nodes_in_group("enemies").size() == 3)
+
+
+## Running is the default gait; the dodge roll is a short burst a little faster than running,
+## dodges a real wolf lunge, ends with a short vulnerable get-up, and walls stop it.
+func _roll_checks(p, wolves) -> void:
+	p.invuln_t = 0.0; p.state = "move"; p.velocity = Vector2.ZERO
+	var run_speed: float = p.walk_speed * p.RUN_MULT
+	# default movement = run
+	Input.action_press("move_right")
+	for i in 12: await physics_frame
+	var v_run: float = p.velocity.length()
+	if p.sprite.sprite_frames.has_animation("run_side"):
+		ok("default movement is the run", absf(v_run - run_speed) < 2.0 and String(p.sprite.animation) == "run_side",
+			"%.0f px/s, %s" % [v_run, p.sprite.animation])
+	else:   # a hero without run strips yet (Gwen) keeps walking
+		ok("no run strips: walks", absf(v_run - p.walk_speed) < 2.0, "%.0f px/s" % v_run)
+	# roll speed: a little faster than the run
+	await tap("dodge")
+	var v_roll := 0.0
+	for i in 6:
+		await physics_frame
+		if p.state == "roll": v_roll = maxf(v_roll, p.velocity.length())
+	Input.action_release("move_right")
+	ok("roll a little faster than running (1.1-1.4x)", v_roll > run_speed * 1.1 and v_roll < run_speed * 1.4,
+		"roll %.0f vs run %.0f px/s" % [v_roll, run_speed])
+	while p.state == "roll": await physics_frame
+	# the get-up at the end of the roll is not protected
+	p.invuln_t = 0.0; p.state = "move"
+	for i in 20: await physics_frame
+	await tap("dodge")
+	while p.state == "roll" and p.roll_t < p.ROLL_IFRAMES + 0.01: await physics_frame
+	var hp_a: int = p.hp
+	if p.state == "roll":
+		p.take_hit(1, p.global_position + Vector2(20, 0))
+	ok("end of the roll (get-up) is not invulnerable", p.hp == hp_a - 1, "hp %d -> %d" % [hp_a, p.hp])
+	p.hp = p.max_hp; p.invuln_t = 0.0; p.state = "move"; p.knock = Vector2.ZERO
+	for i in 30: await physics_frame
+	# a real wolf lunge is dodged by rolling as it leaps
+	var w = wolves[2]
+	w.set_physics_process(true)
+	p.invuln_t = 0.0; p.state = "move"
+	w.global_position = p.global_position + Vector2(150, 0)
+	w.state = "telegraph"; w.t = 0.0; w.holding_token = true; w.get_script().attackers = 1
+	var hp_b: int = p.hp
+	while w.state == "telegraph": await physics_frame
+	Input.action_press("move_up")
+	await tap("dodge")
+	Input.action_release("move_up")
+	while w.state == "lunge": await physics_frame
+	ok("rolling as the wolf leaps dodges the bite", p.hp == hp_b, "hp %d -> %d" % [hp_b, p.hp])
+	w.set_physics_process(false); w.global_position = Vector2(2300, 1500); w.state = "circle"
+	w._release_token()
+	while p.state == "roll": await physics_frame
+	# walls stop a roll
+	p.invuln_t = 0.0; p.state = "move"
+	var wall := StaticBody2D.new()
+	wall.collision_layer = 1
+	var cs := CollisionShape2D.new()
+	var rs := RectangleShape2D.new()
+	rs.size = Vector2(20, 200)
+	cs.shape = rs
+	wall.add_child(cs)
+	p.get_parent().add_child(wall)
+	wall.global_position = p.global_position + Vector2(80, 0)   # nearer than a full roll (96px)
+	for i in 30: await physics_frame   # roll cooldown
+	var x0: float = p.global_position.x
+	Input.action_press("move_right")
+	await tap("dodge")
+	Input.action_release("move_right")
+	var max_x := x0
+	while p.state == "roll":
+		await physics_frame
+		max_x = maxf(max_x, p.global_position.x)
+	ok("a wall stops the roll", max_x - x0 > 20.0 and max_x < wall.global_position.x - 10.0,
+		"rolled %.0fpx, stopped at x %.0f, wall face at %.0f" % [max_x - x0, max_x, wall.global_position.x - 10.0])
+	wall.queue_free()
+	p.hp = p.max_hp; p.hp_changed.emit(p.hp, p.max_hp)
