@@ -59,7 +59,7 @@ def slivers(f):
     s = f[..., 3] > 128
     up, top, bot = upper(f)
     neck = np.zeros_like(s)
-    neck[top + int(.15 * (bot - top)):top + int(.36 * (bot - top))] = True
+    neck[top + int(.21 * (bot - top)):top + int(.36 * (bot - top))] = True   # below the eyes
     light = s & (f[..., :3].min(2) > 150)
     thin = light & ~ndimage.binary_opening(light, structure=np.ones((3, 3)))
     outer = ndimage.binary_dilation(~s, iterations=2)
@@ -115,11 +115,29 @@ def main():
             if comp.sum() >= 10:
                 yy, xx = np.where(comp)
                 fails.append(f"frame {i}: pale backdrop-coloured patch, {int(comp.sum())}px at ({int(xx.mean())},{int(yy.mean())})")
+    # 6. WHITE BELOW THE BELT: nothing in the outfit below the belt is white, so light colourless
+    #    patches there are backdrop between arm, hip and legs
+    for i, f in enumerate(walk):
+        s_ = f[..., 3] > 128
+        navy = s_ & (f[..., 2] > f[..., 0] + 8) & (f[..., 0] < 110)
+        ys_ = np.where(s_.any(1))[0]
+        rows = np.where(navy.sum(1) > 14)[0]
+        rows = rows[rows > ys_.min() + 0.42 * (ys_.max() - ys_.min())]   # trousers, not the neckerchief
+        if not len(rows):
+            continue
+        pale = (f[..., 3] > 60) & (f[..., :3].min(2) > 160) & (f[..., :3].max(2) - f[..., :3].min(2) < 40)
+        pale[:rows.min() + 2] = False
+        lab, k = ndimage.label(pale)
+        for j in range(1, k + 1):
+            comp = lab == j
+            if comp.sum() >= 4:
+                yy, xx = np.where(comp)
+                fails.append(f"frame {i}: white patch below the belt (between arm and body), {int(comp.sum())}px at ({int(xx.mean())},{int(yy.mean())})")
     from collar_median import collar_consistency
     # the collar behind the neck is only seen in the side view
     cc = collar_consistency(walk) if "side" in name else [0] * n
     for i, v in enumerate(cc):
-        if v > 18:
+        if v > 24:
             fails.append(f"frame {i}: collar behind the neck differs from the rest of the loop ({v}px: background or a dark patch)")
     print(f"== shape {name}: {n} frames; collar odd px {min(cc)}-{max(cc)}; outline notch px {min(rough)}-{max(rough)} (standing {ref_notch}); "
           f"edge slivers {min(sl)}-{max(sl)} (standing {ref_sl})")

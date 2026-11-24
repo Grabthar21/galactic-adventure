@@ -200,6 +200,24 @@ def clean_gentle(f):
                 continue                                              # eyes etc.
             if (comp & near_out).any() or (comp & gaps).sum() >= 0.6 * comp.sum():
                 a[comp] = 0
+    # below the belt nothing in the outfit is white (gloves, trousers, boots; the buckle is gold):
+    # light, colourless pixels there are the old backdrop between arm, hip and legs -> cleared
+    navy = (a >= 200) & (rgb[:, :, 2] > rgb[:, :, 0] + 8) & (rgb[:, :, 0] < 110)
+    ysb = np.where((a >= 200).any(1))[0]
+    rows = np.where(navy.sum(1) > 20)[0]                     # trousers (wide), not the neckerchief
+    if len(ysb):
+        rows = rows[rows > ysb.min() + 0.42 * (ysb.max() - ysb.min())]
+    if len(rows):
+        belt = rows.min()
+        sat = rgb.max(2) - rgb.min(2)
+        pale = (a > 0) & (rgb.min(2) > 150) & (sat < 40)
+        pale[:belt] = False
+        lab, nl = ndimage.label(pale)
+        near_out = ndimage.binary_dilation(a == 0, iterations=3)
+        for k in range(1, nl + 1):
+            comp = lab == k
+            if (comp & near_out).any() or comp.sum() <= 30:
+                a[comp] = 0
     # thin wisps on the outline (1-2 px strands of half see-through hair or collar behind the neck):
     # they come and go between frames and turn into dark hooks once the outline is inked. Anything
     # an opening with a 3x3 square removes, in pieces under 30 px, is dropped.
@@ -221,8 +239,14 @@ def clean_gentle(f):
         sizes = ndimage.sum(lightp, lab, range(1, nl + 1))
         _, (hy, hx) = ndimage.distance_transform_edt(~hair, return_indices=True)
         rgb = rgb.copy()
+        ysb = np.where((a >= 200).any(1))[0]
+        eye_end = ysb.min() + int(0.21 * (ysb.max() - ysb.min())) if len(ysb) else 0
         for k in np.where(sizes <= 40)[0] + 1:
             comp = lab == k
+            if np.where(comp)[0].mean() < eye_end:
+                continue          # eye whites sit between dark lines too: never recoloured
+            if not (ndimage.binary_dilation(comp, iterations=3) & ~body).any():
+                continue          # only pockets on the outline (hair tips); inside the body it's the shirt
             ring = ndimage.binary_dilation(comp, iterations=2) & ~comp
             hair_or_out = (ring & (hair | ~body)).sum()
             if ring.sum() and (ring & hair).sum() >= 0.25 * ring.sum() and hair_or_out >= 0.7 * ring.sum():
@@ -240,7 +264,7 @@ def clean_gentle(f):
         collar_band = np.zeros_like(semi)
         if len(ysb):
             hh = ysb.max() - ysb.min()
-            collar_band[ysb.min() + int(.15 * hh):ysb.min() + int(.40 * hh)] = True
+            collar_band[ysb.min() + int(.22 * hh):ysb.min() + int(.40 * hh)] = True
         fix = semi & (sat < 45) & (dl <= 12) & collar_band
         rgb = rgb.copy()
         rgb[fix] = rgb[ly[fix], lx[fix]]

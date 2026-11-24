@@ -45,6 +45,13 @@ def ink(f, col, col_l):
     rgb = f[:, :, :3]
     lum = rgb.mean(2)
     need = np.clip((lum - col_l) / 60.0, 0, 1)          # already as dark as a line -> unchanged
+    # eyes: in the 3/4 view the far eye sits on the face's outline; its white must stay white.
+    # Very light pixels in the head (the top 21% of the figure, above the chin) are never inked.
+    ys = np.where(solid.any(1))[0]
+    if len(ys):
+        head = np.zeros_like(solid)
+        head[:ys.min() + int(0.21 * (ys.max() - ys.min()))] = True
+        need[head & (rgb.min(2) > 175)] = 0
     k = (w * need)[:, :, None]
     out = f.copy()
     out[:, :, :3] = rgb * (1 - k) + col[None, None, :] * k
@@ -56,10 +63,23 @@ def main():
     base = np.array(Image.open(sys.argv[2]).convert("RGBA")).astype(np.float32)
     col, col_l = line_colour(base)
     out = sheet.copy()
-    inked = []
+    inked, face_hits = [], []
     for i in range(sheet.shape[1] // SRC):
-        out[:, i * SRC:(i + 1) * SRC], n = ink(sheet[:, i * SRC:(i + 1) * SRC], col, col_l)
+        before = sheet[:, i * SRC:(i + 1) * SRC]
+        out[:, i * SRC:(i + 1) * SRC], n = ink(before, col, col_l)
         inked.append(int(n))
+        # check: the ink must never turn light details of the face (eye whites, highlights) dark
+        after = out[:, i * SRC:(i + 1) * SRC]
+        s = before[..., 3] > 128
+        ys = np.where(s.any(1))[0]
+        band = np.zeros_like(s)
+        band[ys.min():ys.min() + int(0.21 * (ys.max() - ys.min()))] = True
+        hit = band & s & (before[..., :3].min(2) > 175) & (after[..., :3].mean(2) < before[..., :3].mean(2) - 40)
+        face_hits.append(int(hit.sum()))
+    if max(face_hits) > 0:
+        print(f"FAIL: outline ink darkened light face pixels (eye whites) in frames: "
+              f"{[i for i, v in enumerate(face_hits) if v]}")
+        sys.exit(1)
     Image.fromarray(np.clip(out, 0, 255).astype(np.uint8)).save(sys.argv[3])
     print(f"{sys.argv[1]}: outline inked with {tuple(int(c) for c in col)}; px per frame {min(inked)}-{max(inked)}")
 
