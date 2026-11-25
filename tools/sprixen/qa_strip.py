@@ -91,7 +91,7 @@ def main():
             specks = [int(s) for s in sizes if s < main]
             if specks:
                 fails.append(f"frame {i}: {len(specks)} stray speck(s), largest {max(specks)}px")
-        if kind in ("run", "roll"):
+        if kind in ("run", "roll", "attack"):
             bots.append(bot)          # a run leaves the ground; checked for the whole strip below
         elif bot != FOOT_Y:
             fails.append(f"frame {i}: feet at row {bot}, not on the ground row {FOOT_Y}")
@@ -127,6 +127,14 @@ def main():
         if step.max() > 14 * K:
             fails.append(f"roll jumps {step.max():.0f}px between frames {int(step.argmax())}->{int(step.argmax()) + 1}")
         print(f"   roll: centre path max step {step.max():.1f}px, feet {min(bots)}-{max(bots)}")
+    if kind == "attack":
+        # sword slashes: he stays on his feet (a lunge may lift the back heel a little); fast
+        # swings change the silhouette a lot from frame to frame, so no pop / centre-jump rules
+        if max(bots) > FOOT_Y:
+            fails.append(f"attack: feet below the ground row ({max(bots)} > {FOOT_Y})")
+        if min(bots) < FOOT_Y - 6 * K:
+            fails.append(f"attack: feet leave the ground ({FOOT_Y - min(bots)}px)")
+        print(f"   attack: feet rows {min(bots)}-{max(bots)}")
     if kind == "run":
         # feet: never below the ground; the planted frames on it; airborne frames lifted a little
         if max(bots) > FOOT_Y:
@@ -156,7 +164,7 @@ def main():
                 fails.append(f"head pops {jy[i]:.0f}px up/down between frames {i}->{(i + 1) % n}")
         print(f"   head x {hx.min():.1f}-{hx.max():.1f} (max step {jx.max():.1f}), head top {hy.min():.0f}-{hy.max():.0f} (max step {jy.max():.0f}), feet {min(bots)}-{max(bots)}")
     jumps = np.abs(np.diff(np.r_[C, C[0]]))
-    if kind not in ("run", "roll") and jumps.max() > 2.5 * K:
+    if kind not in ("run", "roll", "attack") and jumps.max() > 2.5 * K:
         fails.append(f"body centre jumps {jumps.max():.1f}px between frames {int(jumps.argmax())}->{(int(jumps.argmax()) + 1) % n}")
     # head shape stability (IoU vs median frame)
     ref = heads[n // 2]
@@ -170,7 +178,7 @@ def main():
     # pops: silhouette change between consecutive frames, including the loop seam
     d = np.array([(masks[i] ^ masks[(i + 1) % n]).sum() for i in range(n)], float)
     med = np.median(d)
-    for i, v in enumerate(d):
+    for i, v in enumerate(d if kind != "attack" else []):
         if v > max(2.6 * med, med + 120 * K * K):
             fails.append(f"pop: frame {i}->{(i + 1) % n} changes {int(v)}px (typical {int(med)})")
 

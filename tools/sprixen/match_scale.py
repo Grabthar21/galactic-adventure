@@ -30,9 +30,14 @@ cols = np.where(head[:, :, 3].max(0) > 40)[0]
 head = head[:, cols.min():cols.max() + 1]
 tmpl0 = gray_on_grey(head)
 picks = np.linspace(0, n - 1, min(n, 6)).astype(int)
+import os
+if os.environ.get("SCALE_FRAMES"):
+    # measure only on these frames (e.g. an attack's standing frames: its swings don't look like
+    # the standing drawing, and Sprixen draws an attack take smaller to leave room for the sword)
+    picks = np.array([int(v) % n for v in os.environ["SCALE_FRAMES"].split(",")])
 imgs = [gray_on_grey(frames[i]) for i in picks]
 best = None
-for k in np.arange(0.85, 1.25, 0.005):
+for k in np.arange(0.75, 1.25, 0.005):
     t = cv2.resize(tmpl0, None, fx=k, fy=k, interpolation=cv2.INTER_AREA)
     score = np.mean([cv2.matchTemplate(im, t, cv2.TM_CCOEFF_NORMED).max() for im in imgs])
     if best is None or score > best[0]:

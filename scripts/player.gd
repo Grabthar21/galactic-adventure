@@ -571,9 +571,15 @@ func weapon_pose() -> Dictionary:
 		var u := sprite.frame_progress if j != i else 0.0
 		var a: Dictionary = fr[i]
 		var b: Dictionary = fr[j]
+		if a.get("h", false):
+			return {}     # the blade can't be seen in this frame (behind him, or put away)
+		if b.get("h", false):
+			b = a
 		var cell: Vector2 = _anim_cell.get(_attack_anim, CELL)
 		var g := Vector2(a["g"][0], a["g"][1]).lerp(Vector2(b["g"][0], b["g"][1]), u)
-		var ang := lerp_angle(deg_to_rad(a["a"]), deg_to_rad(b["a"]), u)
+		# the track's angles run on continuously through the swing (no wrap at 360), so a plain
+		# blend turns the blade the way the slash turns
+		var ang := deg_to_rad(lerpf(a["a"], b["a"], u))
 		var vis := lerpf(a["l"], b["l"], u)
 		var full_c: float = tr["full_len"] if tr["full_len"] > 0.0 else maxf(vis, 1.0)
 		var local := (g - cell / 2.0 + sprite.offset) * sprite.scale

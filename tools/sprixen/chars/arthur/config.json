@@ -92,5 +92,105 @@
     }
   },
   "roll_frames": 18,
-  "roll_seconds": 0.36
+  "roll_seconds": 0.36,
+  "attacks": {
+    "side": {
+      "raw": "raw/attack_side.png",
+      "segments": {
+        "attack1": [
+          6,
+          34,
+          12
+        ],
+        "attack2": [
+          35,
+          47,
+          9
+        ],
+        "attack3": [
+          48,
+          72,
+          14
+        ],
+        "attack_rec": [
+          8,
+          0,
+          7
+        ]
+      },
+      "spins": {
+        "attack1": -1,
+        "attack2": -1,
+        "attack3": 1
+      }
+    },
+    "down": {
+      "raw": "raw/attack_down.png",
+      "segments": {
+        "attack1": [
+          15,
+          35,
+          13
+        ],
+        "attack2": [
+          36,
+          47,
+          9
+        ],
+        "attack3": [
+          48,
+          71,
+          14
+        ],
+        "attack_rec": [
+          16,
+          10,
+          6
+        ]
+      },
+      "spins": {
+        "attack1": -1,
+        "attack2": 1,
+        "attack3": -1
+      }
+    },
+    "up": {
+      "raw": "raw/attack_up.png",
+      "segments": {
+        "attack1": [
+          4,
+          33,
+          13
+        ],
+        "attack2": [
+          34,
+          46,
+          9
+        ],
+        "attack3": [
+          47,
+          66,
+          14
+        ],
+        "attack_rec": [
+          8,
+          0,
+          7
+        ]
+      },
+      "spins": {}
+    }
+  },
+  "attack_seconds": {
+    "attack1": 0.36,
+    "attack2": 0.26,
+    "attack3": 0.42,
+    "attack_rec": 0.22
+  },
+  "attack_hit": {
+    "attack1": 0.75,
+    "attack2": 0.5,
+    "attack3": 0.75
+  },
+  "attack_notes": "Sprixen premium attack take (25 Nov), Arthur swinging a solid lime-green stand-in sword. weapon_track.py erases it and records where it was; the game draws the equipped weapon there. segments: [first raw frame, last raw frame, frames to pick] (last < first plays backwards: the recovery sheathes back to the stance)."
 }

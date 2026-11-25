@@ -37,7 +37,7 @@ RUN_CELL_W = None   # set from config "run_cell_w": run strips use wider cells (
 
 def run(*args, env=None, quiet=True):
     e = dict(os.environ, **(env or {}))
-    if RUN_CELL_W and any(("_run" in str(a) or "_roll" in str(a)) for a in args):
+    if RUN_CELL_W and any(("_run" in str(a) or "_roll" in str(a) or "_attack" in str(a)) for a in args):
         e.setdefault("CELL_W", str(RUN_CELL_W))     # every step touching a run strip uses its cell
     r = subprocess.run([sys.executable, *map(str, args)], cwd=HERE, env=e,
                        capture_output=True, text=True)
@@ -122,6 +122,7 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
             run("skin_match.py", ref, d["clean"], d["clean"])
 
     manifest, results = {}, []
+    attack_parts = {}     # direction -> (combo strip, picked raw frames, raw track, segments)
     refs = {}
     walk_scale = {}
     for direction in ("side", "down", "up"):
@@ -134,7 +135,8 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
         strips = {}
         # walk and run are loops; a roll is a one-shot move (played once per dodge). Runs and rolls
         # are both kept as Sprixen's locked camera drew them ("free" moves below).
-        for kind, moves in (("walk", cfg["walks"]), ("run", cfg.get("runs", {})), ("roll", cfg.get("rolls", {}))):
+        for kind, moves in (("walk", cfg["walks"]), ("run", cfg.get("runs", {})), ("roll", cfg.get("rolls", {})),
+                            ("attack", cfg.get("attacks", {}))):
             if direction not in moves:
                 continue
             # ---- walk
@@ -143,6 +145,13 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
             if kind == "roll":
                 rng = moves[direction].get("frames", [])
                 out = run("pick_oneshot.py", raw, loop, cfg.get("roll_frames", 18), *rng).stdout.strip()
+            elif kind == "attack":
+                # the whole combo (3 slashes + recovery) as one strip, weapon taken out and tracked
+                # (weapon_track.py); split into its parts after the strip is built
+                seg_json = os.path.join(w, f"{direction}_attack_segs.json")
+                json.dump(moves[direction]["segments"], open(seg_json, "w"))
+                atk_track = os.path.join(w, f"{direction}_attack_rawtrack.json")
+                out = run("weapon_track.py", "prep", raw, seg_json, loop, atk_track).stdout.strip()
             else:
                 out = run("find_loop.py", raw, loop, *((16, 44) if kind == "walk" else (10, 40))).stdout.strip()
             frames = Image.open(loop).width // 256
@@ -150,8 +159,10 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
             # the raw walk shows the approved head, so scale/locate against the approved drawing
             loc_base = locate_bases[v] if locate_bases else d["base"]
             loc_prof = json.dumps({k: head_rows(loc_base)[k] for k in ("HEAD_TOP", "BROW", "CHIN_CUT", "FACE")})
-            ms = run("match_scale.py", loop, loc_base, sc, loc_prof,
-                     env={"FALLBACK_SCALE": str(walk_scale[direction])} if kind != "walk" and direction in walk_scale else None).stdout
+            ms_env = {"FALLBACK_SCALE": str(walk_scale[direction])} if kind != "walk" and direction in walk_scale else {}
+            if kind == "attack":   # the take ends standing (the recovery's last frame): measure there
+                ms_env = {"SCALE_FRAMES": "-1,-2"}
+            ms = run("match_scale.py", loop, loc_base, sc, loc_prof, env=ms_env or None).stdout
             print(ms.strip())
             if kind == "walk":
                 walk_scale[direction] = float(ms.split("rescaled by ")[1].split()[0])
@@ -189,7 +200,8 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
                           env={"OUTLINE_WEIGHT": str(cfg.get("style", {}).get("outline_weight", 1)),
                                **({"STRICT_ROWS": "1"} if kind != "walk" else {})}).stdout.strip())
             fps = round(frames / {"walk": cycle, "run": cfg.get("run_cycle_seconds", 0.55),
-                                  "roll": cfg.get("roll_seconds", 0.36)}[kind], 2)
+                                  "roll": cfg.get("roll_seconds", 0.36),
+                                  "attack": sum(cfg.get("attack_seconds", {"x": 1.3}).values())}[kind], 2)
             strip = os.path.join(ART, f"{prefix}_{direction}_{kind}.png")
             fixed = ({"PLACE_FIXED": "1"} if kind != "walk" else {}) | ({"ONESHOT": "1"} if kind == "roll" else {})
             run("build_walk_strip.py", lk, strip, H, fps,
@@ -229,8 +241,11 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
                 pass   # the near-glove size is matched after the idle strip exists (below)
             run("masks.py", strip, strip.replace(".png", "_mask.png"), head_px,   # skin/hair for recolouring
                 env={"TUMBLE": "1"} if kind == "roll" else None)
-            manifest[f"{kind}_{direction}"] = {"frames": frames, "fps": fps,
-                                               **({"cell_w": RUN_CELL_W} if kind != "walk" and RUN_CELL_W else {})}
+            if kind == "attack":
+                attack_parts[direction] = (strip, loop, atk_track, seg_json)
+            else:
+                manifest[f"{kind}_{direction}"] = {"frames": frames, "fps": fps,
+                                                   **({"cell_w": RUN_CELL_W} if kind != "walk" and RUN_CELL_W else {})}
             strips[kind] = strip
             print(f"{kind}_{direction}: {out}")
 
@@ -264,6 +279,20 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
                     print(run("deflicker.py", strip, env={"REF_STRIP": rfp, **mt}).stdout.strip())
             run("masks.py", strip, strip.replace(".png", "_mask.png"), head_px,
                 env={"TUMBLE": "1"} if kind == "roll" else None)
+        if direction in attack_parts:
+            # split the combo strip into attack1-3 + attack_rec, weapon track in strip-cell pixels
+            strip, loop, atk_track, seg_json = attack_parts[direction]
+            meta = os.path.join(w, f"{direction}_attack_meta.json")
+            json.dump({"spins": cfg["attacks"][direction].get("spins", {}),
+                       "hit": cfg.get("attack_hit", {})}, open(meta, "w"))
+            from cells import CELL_H as _CH
+            print(run("weapon_track.py", "finish", strip, loop, atk_track, seg_json,
+                      os.path.join(ART, f"{prefix}_{direction}"), meta, RUN_CELL_W, _CH).stdout.strip())
+            segs = cfg["attacks"][direction]["segments"]
+            for part in segs:
+                nfr = Image.open(os.path.join(ART, f"{prefix}_{direction}_{part}.png")).width // RUN_CELL_W
+                manifest[f"{part}_{direction}"] = {"frames": nfr, "cell_w": RUN_CELL_W,
+                                                   "fps": round(nfr / cfg["attack_seconds"][part], 2)}
         if direction == "side" and extra_idles:
             for x in cfg.get("extra_idles", []):
                 xo = os.path.join(ART, x["out"])
@@ -302,8 +331,8 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
     # ---- QA
     ok = True
     for direction in ("side", "down", "up"):
-        for kind in ("walk", "idle", "run", "roll"):
-            if kind in ("run", "roll") and direction not in cfg.get(kind + "s", {}):
+        for kind in ("walk", "idle", "run", "roll", "attack"):
+            if kind in ("run", "roll", "attack") and direction not in cfg.get(kind + "s", {}):
                 continue
             r = run("qa_strip.py", os.path.join(ART, f"{prefix}_{direction}_{kind}.png"),
                     f"{prefix}_{direction}_{kind}", round(H * K), kind)
@@ -336,6 +365,13 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
     r = run("qa_cross.py", prefix)
     print(r.stdout.strip())
     ok &= r.returncode == 0
+    # the whole-combo attack strips were only a build step (the game loads the split parts)
+    for direction in cfg.get("attacks", {}):
+        for suffix in (".png", "_mask.png"):
+            pth = os.path.join(ART, f"{prefix}_{direction}_attack{suffix}")
+            if os.path.exists(pth):
+                shutil.copy(pth, f"/tmp/{prefix}_{direction}_attack_combo{suffix}")
+                os.remove(pth)
     for (direction, kind), rp in refs.items():          # kept for inspection
         shutil.copy(rp, f"/tmp/ref_{prefix}_{direction}" + ("" if kind == "walk" else "_" + kind) + ".png")
     shutil.rmtree(w, ignore_errors=True)

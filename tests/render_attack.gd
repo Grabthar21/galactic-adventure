@@ -76,7 +76,7 @@ func _process(_d: float) -> bool:
 		Input.action_press("move_" + dir)
 	if _k == 4:
 		Input.action_release("move_" + dir)
-	if _k >= 12 and _k % 6 == 0 and _player.combo < 3:
+	if _k >= 12 and _k % 6 == 0 and _max_combo < 3:
 		Input.action_press("attack")
 	if _k >= 12 and _k % 6 == 1:
 		Input.action_release("attack")
