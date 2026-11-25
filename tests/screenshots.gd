@@ -22,7 +22,7 @@ func _run() -> void:
 	main.ui._pick_hero(0); main.ui._start()
 	for i in 260: await process_frame
 	await shot("02_farm")
-	main.player.global_position = Vector2(1300, 980); main.player.weapon = "rod"
+	main.player.global_position = Vector2(1300, 980); main.player.equip("metal_rod")
 	main.cutscene = false
 	main.ui.fade.color.a = 0
 	main._spawn_wolves()

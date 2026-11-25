@@ -36,12 +36,20 @@ const SCALE := 0.75
 # strips from tools/sprixen may be drawn larger than the 98x148 cells (the smooth Sprixen-style
 # look, e.g. 147x222): the cell is read from each strip's height and drawn at SCALE * 148 / height
 var _anim_cell := {}           # animation name -> Vector2 cell size
+# 3-slash combo (left click / J / gamepad X). Each click during a swing queues the next slash,
+# which starts the moment the current one ends -- the attack strips are cut from one continuous
+# Sprixen take, so slash 2 begins in the pose slash 1 ends in. Timings below are the fallback when
+# a hero has no attack strips; with strips, each slash lasts its strip (frames / fps) and lands
+# on the frame the weapon track marks as the hit.
 const SWING_TIMES := [0.26, 0.26, 0.40]  # combo hit 1, 2, 3
 const HIT_AT := 0.07
+const ATTACK_CANCEL := 0.12     # a dodge can cut a swing short after this long
+const REF_WEAPON_LEN := 64.0    # game px, grip to tip, of a length_scale 1.0 weapon (no-track fallback)
+const TRAIL_LIFE := 0.11        # s a point of the swing trail lasts
 
 var max_hp := 5
 var hp := 5
-var weapon := ""               # "", "rod", "sword"
+var weapon: MeleeWeapon = null # equipped melee weapon (res://weapons/*.tres); null = unarmed
 var controllable := false
 var facing := Vector2.DOWN     # last movement direction (8-way, normalized)
 var anim_dir := "down"         # down / up / side
@@ -50,6 +58,11 @@ var combo := 0
 var attack_t := 0.0
 var queued := false
 var hit_done := false
+var recover_t := 0.0
+var _attack_anim := ""         # attack strip playing ("" = none: the fallback swing)
+var _tracks := {}              # attack anim name -> weapon track {frames, hit, full_len}
+var _trail: Array = []         # [local tip position, age] of the swing trail
+var fx_back: Node2D            # weapon drawn behind the body (a swing on his far side)
 var roll_t := 0.0
 var roll_cd := 0.0
 var roll_vec := Vector2.ZERO
@@ -72,6 +85,9 @@ func _ready() -> void:
 	rect.size = Vector2(30, 14)
 	shape.shape = rect
 	add_child(shape)
+	fx_back = Node2D.new()
+	fx_back.draw.connect(_draw_weapon.bind(true))
+	add_child(fx_back)
 	sprite = AnimatedSprite2D.new()
 	sprite.scale = Vector2(SCALE, SCALE)
 	sprite.offset = Vector2(0, -CELL.y / 2.0 + 2.0)
@@ -121,6 +137,7 @@ func setup(hero: String) -> void:
 		if _add_strip(frames, key, "res://art/%s_%s_roll.png" % [look, d], 30.0, cw):
 			frames.set_animation_speed(key, frames.get_frame_count(key) / roll_time)
 			frames.set_animation_loop(key, false)
+	_load_attacks(frames, look, anims)
 	if not _add_strip(frames, "idle_up", "res://art/%s_up_idle.png" % look, _fps(anims, "idle_up", IDLE_SIDE_FPS)):
 		_add_anim(frames, tex, "idle_up", [[3, 0]], 1.0)
 	var side_path := "res://art/%s_side_walk.png" % (look if hero == base else hero)
@@ -269,9 +286,51 @@ func is_invulnerable() -> bool:
 	return (state == "roll" and roll_t < ROLL_IFRAMES) or invuln_t > 0.0 or state == "dead"
 
 
+## Equip a melee weapon: a MeleeWeapon resource, or its id (res://weapons/<id>.tres); "" or null
+## = unarmed. Any weapon with moveset "sword" uses the same slash animations -- the game draws the
+## weapon's own picture in his hand, so swapping weapons needs no new art of the hero.
+func equip(w) -> void:
+	if w is String:
+		w = load("res://weapons/%s.tres" % w) if w != "" else null
+	weapon = w
+	fx.queue_redraw()
+	fx_back.queue_redraw()
+
+
+func weapon_id() -> String:
+	return weapon.id if weapon != null else ""
+
+
 func damage_value() -> int:
-	var base := 2 if weapon == "sword" else 1
-	return base + (1 if combo == 3 else 0)
+	return int(_combo_stat(weapon.damage if weapon else [1, 1, 2], 1))
+
+
+func _combo_stat(arr: Array, fallback):
+	if arr.is_empty():
+		return fallback
+	return arr[clampi(combo - 1, 0, arr.size() - 1)]
+
+
+## Attack strips (tools/sprixen weapon_track.py): art/<look>_<dir>_attack<1-3>.png, plus an
+## optional art/<look>_<dir>_attack_rec.png (back to the stance when no further click comes),
+## and the weapon track art/<look>_<dir>_attack_track.json.
+func _load_attacks(frames: SpriteFrames, look: String, anims: Dictionary) -> void:
+	for d in ["side", "down", "up"]:
+		var track_path := "res://art/%s_%s_attack_track.json" % [look, d]
+		var track = null
+		if FileAccess.file_exists(track_path):
+			track = JSON.parse_string(FileAccess.get_file_as_string(track_path))
+		for part in ["attack1", "attack2", "attack3", "attack_rec"]:
+			var anim: String = part + "_" + d
+			var cw := 0.0
+			if anims.has(anim) and anims[anim] is Dictionary and anims[anim].has("cell_w"):
+				cw = float(anims[anim]["cell_w"])
+			if _add_strip(frames, anim, "res://art/%s_%s_%s.png" % [look, d, part], _fps(anims, anim, 24.0), cw):
+				frames.set_animation_loop(anim, false)
+				if track is Dictionary and track.has(part):
+					var t: Dictionary = track[part]
+					t["full_len"] = float(track.get("full_len", 0.0))
+					_tracks[anim] = t
 
 
 func take_hit(amount: int, from_pos: Vector2) -> void:
@@ -304,27 +363,37 @@ func _physics_process(delta: float) -> void:
 			velocity = input * walk_speed * (RUN_MULT if running else 1.0)
 			if input.length() > 0.1:
 				facing = input.normalized()
-			if controllable and weapon != "" and Input.is_action_just_pressed("attack"):
+			if controllable and weapon != null and Input.is_action_just_pressed("attack"):
 				_start_attack(1)
 			elif controllable and Input.is_action_just_pressed("dodge") and roll_cd <= 0.0:
 				_start_roll(input)
 		"attack":
 			attack_t += delta
 			velocity = facing * (60.0 if attack_t < 0.1 else 0.0)
-			if Input.is_action_just_pressed("attack") and controllable:
+			if Input.is_action_just_pressed("attack") and controllable and combo < 3:
 				queued = true
-			if not hit_done and attack_t >= HIT_AT:
+			if not hit_done and attack_t >= hit_time():
 				hit_done = true
 				_apply_hit()
-			if controllable and Input.is_action_just_pressed("dodge") and roll_cd <= 0.0 and attack_t > 0.12:
+			if controllable and Input.is_action_just_pressed("dodge") and roll_cd <= 0.0 and attack_t > ATTACK_CANCEL:
 				_start_roll(input)
-			elif attack_t >= SWING_TIMES[combo - 1]:
+			elif attack_t >= swing_time():
 				if queued and combo < 3:
 					_start_attack(combo + 1)
 				else:
-					state = "move"
-					combo = 0
-			fx.queue_redraw()
+					_end_attack()
+		"recover":
+			# easing back to the stance after the last slash; any input takes over at once
+			recover_t += delta
+			velocity = Vector2.ZERO
+			if controllable and weapon != null and Input.is_action_just_pressed("attack"):
+				_start_attack(1)
+			elif controllable and Input.is_action_just_pressed("dodge") and roll_cd <= 0.0:
+				_start_roll(input)
+			elif input.length() > 0.1 or recover_t >= _strip_time("attack_rec_" + anim_dir):
+				state = "move"
+				combo = 0
+				_attack_anim = ""
 		"roll":
 			# distance covered so far: ROLL_DIST * (B*u - (B-1)*u^2), u = share of the roll's time;
 			# this frame's velocity moves exactly the step between, whatever the frame rate
@@ -352,6 +421,9 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	_update_anim()
+	_update_trail(delta)
+	fx.queue_redraw()
+	fx_back.queue_redraw()
 	sprite.modulate.a = 0.75 if (state == "roll" and not _has_roll_art()) else (0.35 if (invuln_t > 0.0 and int(invuln_t * 14.0) % 2 == 0) else 1.0)
 
 
@@ -362,14 +434,63 @@ func _start_attack(n: int) -> void:
 	queued = false
 	hit_done = false
 	var input := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	if input.length() > 0.1:
-		facing = input.normalized()
+	if input.length() > 0.1 and n == 1:
+		facing = input.normalized()   # aim the first slash; the rest of the combo keeps its line
+	_update_anim()
+	var anim := "attack%d_%s" % [n, anim_dir]
+	_attack_anim = anim if sprite.sprite_frames != null and sprite.sprite_frames.has_animation(anim) else ""
+	if _attack_anim != "":
+		sprite.play(_attack_anim)
+		sprite.frame = 0
+		sprite.speed_scale = _weapon_speed()
+
+
+func _end_attack() -> void:
+	var rec := "attack_rec_" + anim_dir
+	if sprite.sprite_frames != null and sprite.sprite_frames.has_animation(rec):
+		state = "recover"
+		recover_t = 0.0
+		_attack_anim = rec
+		sprite.play(rec)
+		sprite.frame = 0
+		sprite.speed_scale = _weapon_speed()
+	else:
+		state = "move"
+		combo = 0
+		_attack_anim = ""
+
+
+func _weapon_speed() -> float:
+	return weapon.speed if weapon != null and weapon.speed > 0.0 else 1.0
+
+
+## Seconds a strip takes at the weapon's speed (0 if missing).
+func _strip_time(anim: String) -> float:
+	if sprite.sprite_frames == null or not sprite.sprite_frames.has_animation(anim):
+		return 0.0
+	return sprite.sprite_frames.get_frame_count(anim) / sprite.sprite_frames.get_animation_speed(anim) / _weapon_speed()
+
+
+## How long the current slash lasts.
+func swing_time() -> float:
+	if _attack_anim.begins_with("attack") and _attack_anim != "" and not _attack_anim.begins_with("attack_rec"):
+		return _strip_time(_attack_anim)
+	return SWING_TIMES[combo - 1] / _weapon_speed()
+
+
+## When in the current slash the blow lands.
+func hit_time() -> float:
+	if _tracks.has(_attack_anim) and _tracks[_attack_anim].has("hit"):
+		var fps := sprite.sprite_frames.get_animation_speed(_attack_anim) * _weapon_speed()
+		return float(_tracks[_attack_anim]["hit"]) / fps
+	return HIT_AT / _weapon_speed()
 
 
 func _start_roll(input: Vector2) -> void:
 	state = "roll"
 	roll_t = 0.0
 	combo = 0
+	_attack_anim = ""
 	roll_vec = input.normalized() if input.length() > 0.1 else facing
 	facing = roll_vec
 	_update_anim()
@@ -383,14 +504,16 @@ func _has_roll_art() -> bool:
 
 
 func _apply_hit() -> void:
-	var reach := 95.0 if combo < 3 else 115.0
+	var reach: float = _combo_stat(weapon.reach if weapon else [], 95.0 if combo < 3 else 115.0)
+	var arc: float = _combo_stat(weapon.arc_half_deg if weapon else [], 75.0)
+	var kb: float = _combo_stat(weapon.knockback if weapon else [], 260.0 if combo < 3 else 520.0)
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(e) or e.dead:
 			continue
 		var to: Vector2 = e.global_position - global_position
 		to.y *= 1.4  # top-down perspective: vertical distances read shorter
-		if to.length() <= reach and (to.length() < 30.0 or facing.angle_to(to.normalized()) < deg_to_rad(75)):
-			e.take_hit(damage_value(), global_position, 260.0 if combo < 3 else 520.0)
+		if to.length() <= reach and (to.length() < 30.0 or absf(facing.angle_to(to.normalized())) < deg_to_rad(arc)):
+			e.take_hit(damage_value(), global_position, kb)
 
 
 func _update_anim() -> void:
@@ -409,6 +532,11 @@ func _update_anim() -> void:
 	if (moving or state == "roll") and DEFAULT_GAIT == "run" and sprite.sprite_frames.has_animation("run_" + anim_dir):
 		anim = "run_" + anim_dir
 		base_speed = walk_speed * RUN_MULT
+	if (state == "attack" or state == "recover") and _attack_anim != "":
+		if sprite.animation != _attack_anim:
+			sprite.play(_attack_anim)
+		sprite.speed_scale = _weapon_speed()
+		return
 	if state == "roll" and _has_roll_art():
 		anim = "roll_" + anim_dir    # one roll per dodge: its fps is set so it lasts roll_time
 		if sprite.animation != anim:
@@ -422,29 +550,84 @@ func _update_anim() -> void:
 
 
 func _draw_fx() -> void:
+	_draw_weapon(false)
+
+
+## Where the weapon is this instant, in this node's space: {grip, angle (grip->tip), length (px,
+## after foreshortening), behind}. From the attack strip's weapon track, blended between its
+## frames so the blade moves smoothly even between drawn frames; or the code swing when the
+## hero has no attack strips. Empty when no weapon is out.
+func weapon_pose() -> Dictionary:
+	if weapon == null or not (state == "attack" or state == "recover"):
+		return {}
+	var full := REF_WEAPON_LEN * weapon.length_scale
+	if _tracks.has(_attack_anim) and String(sprite.animation) == _attack_anim:
+		var tr: Dictionary = _tracks[_attack_anim]
+		var fr: Array = tr["frames"]
+		if fr.is_empty():
+			return {}
+		var i := clampi(sprite.frame, 0, fr.size() - 1)
+		var j := mini(i + 1, fr.size() - 1)
+		var u := sprite.frame_progress if j != i else 0.0
+		var a: Dictionary = fr[i]
+		var b: Dictionary = fr[j]
+		var cell: Vector2 = _anim_cell.get(_attack_anim, CELL)
+		var g := Vector2(a["g"][0], a["g"][1]).lerp(Vector2(b["g"][0], b["g"][1]), u)
+		var ang := lerp_angle(deg_to_rad(a["a"]), deg_to_rad(b["a"]), u)
+		var vis := lerpf(a["l"], b["l"], u)
+		var full_c: float = tr["full_len"] if tr["full_len"] > 0.0 else maxf(vis, 1.0)
+		var local := (g - cell / 2.0 + sprite.offset) * sprite.scale
+		if sprite.flip_h:
+			local.x = -local.x
+			ang = PI - ang
+		var k := sprite.scale.x * weapon.length_scale
+		return {"grip": local, "angle": ang, "length": vis * k, "full": full_c * k,
+			"behind": bool(a["b"]) if u < 0.5 else bool(b["b"])}
 	if state != "attack":
-		return
-	var p := clampf(attack_t / SWING_TIMES[combo - 1], 0.0, 1.0)
+		return {}
+	# fallback swing: an arc in front of him
+	var p := clampf(attack_t / swing_time(), 0.0, 1.0)
 	var center := Vector2(0, -38)
-	var base := facing.angle()
 	var arc := deg_to_rad(150.0 if combo == 3 else 110.0)
 	var dir := 1.0 if combo % 2 == 1 else -1.0
-	var start := base - dir * arc / 2.0
-	var cur := start + dir * arc * minf(p * 1.8, 1.0)
-	var length := 70.0 if weapon == "rod" else 78.0
-	var col := Color(0.75, 0.75, 0.78) if weapon == "rod" else Color(0.85, 0.9, 1.0)
-	# swoosh trail
-	var pts := PackedVector2Array()
-	var steps := 10
-	for i in steps + 1:
-		var a := lerpf(start, cur, float(i) / steps)
-		pts.append(center + Vector2.from_angle(a) * length)
-	if pts.size() > 1:
-		fx.draw_polyline(pts, Color(1, 1, 1, 0.55 * (1.0 - p)), 10.0 if combo == 3 else 6.0, true)
-	# weapon
-	var tip := center + Vector2.from_angle(cur) * length
-	fx.draw_line(center + Vector2.from_angle(cur) * 14.0, tip, col, 5.0 if weapon == "rod" else 6.0, true)
-	if weapon == "sword":
-		var hilt := center + Vector2.from_angle(cur) * 18.0
-		var perp := Vector2.from_angle(cur + PI / 2.0) * 9.0
-		fx.draw_line(hilt - perp, hilt + perp, Color(0.8, 0.65, 0.2), 4.0, true)
+	var start := facing.angle() - dir * arc / 2.0
+	var cur := start + dir * arc * (1.0 - pow(1.0 - minf(p * 1.6, 1.0), 3.0))
+	return {"grip": center + Vector2.from_angle(cur) * 12.0, "angle": cur, "length": full,
+		"full": full, "behind": facing.y < -0.5}
+
+
+func _update_trail(delta: float) -> void:
+	for t in _trail:
+		t[1] += delta
+	while not _trail.is_empty() and _trail[0][1] > TRAIL_LIFE:
+		_trail.pop_front()
+	var pose := weapon_pose()
+	if pose.is_empty() or state != "attack":
+		return
+	_trail.append([pose.grip + Vector2.from_angle(pose.angle) * pose.length * 0.92, 0.0])
+
+
+func _draw_weapon(back: bool) -> void:
+	var canvas: Node2D = fx_back if back else fx
+	var pose := weapon_pose()
+	# swing trail, in front of everything
+	if not back and _trail.size() > 1 and weapon != null:
+		for i in range(1, _trail.size()):
+			var f: float = 1.0 - float(_trail[i][1]) / TRAIL_LIFE
+			var col := weapon.trail_color
+			col.a *= f
+			canvas.draw_line(_trail[i - 1][0], _trail[i][0], col, maxf(1.0, weapon.trail_width * f), true)
+	if pose.is_empty() or bool(pose.behind) != back:
+		return
+	var tex := weapon.texture
+	if tex == null:
+		var tip: Vector2 = pose.grip + Vector2.from_angle(pose.angle) * pose.length
+		canvas.draw_line(pose.grip, tip, Color(0.85, 0.9, 1.0), 5.0, true)
+		return
+	# picture: upright, grip_px held, tip_px straight above it; scale so grip->tip = full length,
+	# then squash along the blade by length/full (a blade swung toward or away from the camera)
+	var s: float = pose.full / maxf(weapon.length_px(), 1.0)
+	var fore: float = clampf(pose.length / maxf(pose.full, 0.001), 0.05, 1.0)
+	canvas.draw_set_transform(pose.grip, pose.angle + PI / 2.0, Vector2(s, s * fore))
+	canvas.draw_texture(tex, -weapon.grip_px)
+	canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
