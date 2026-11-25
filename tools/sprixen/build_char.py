@@ -37,7 +37,7 @@ RUN_CELL_W = None   # set from config "run_cell_w": run strips use wider cells (
 
 def run(*args, env=None, quiet=True):
     e = dict(os.environ, **(env or {}))
-    if RUN_CELL_W and any("_run" in str(a) for a in args):
+    if RUN_CELL_W and any(("_run" in str(a) or "_roll" in str(a)) for a in args):
         e.setdefault("CELL_W", str(RUN_CELL_W))     # every step touching a run strip uses its cell
     r = subprocess.run([sys.executable, *map(str, args)], cwd=HERE, env=e,
                        capture_output=True, text=True)
@@ -132,13 +132,19 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
         head_px = round((d["prof"]["CHIN_CUT"] - d["prof"]["HEAD_TOP"]) / d["prof"]["HEIGHT"] * H * K)
 
         strips = {}
-        for kind, moves in (("walk", cfg["walks"]), ("run", cfg.get("runs", {}))):
+        # walk and run are loops; a roll is a one-shot move (played once per dodge). Runs and rolls
+        # are both kept as Sprixen's locked camera drew them ("free" moves below).
+        for kind, moves in (("walk", cfg["walks"]), ("run", cfg.get("runs", {})), ("roll", cfg.get("rolls", {}))):
             if direction not in moves:
                 continue
             # ---- walk
             raw = os.path.join(cdir, moves[direction]["raw"])
             loop = os.path.join(w, f"{direction}_{kind}_loop.png")
-            out = run("find_loop.py", raw, loop, *((16, 44) if kind == "walk" else (10, 40))).stdout.strip()
+            if kind == "roll":
+                rng = moves[direction].get("frames", [])
+                out = run("pick_oneshot.py", raw, loop, cfg.get("roll_frames", 18), *rng).stdout.strip()
+            else:
+                out = run("find_loop.py", raw, loop, *((16, 44) if kind == "walk" else (10, 40))).stdout.strip()
             frames = Image.open(loop).width // 256
             sc = os.path.join(w, f"{direction}_{kind}_scaled.png")
             # the raw walk shows the approved head, so scale/locate against the approved drawing
@@ -157,11 +163,12 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
                 # geometry (head size, bob, leg length, placement) is measured on the sheet WITHOUT the
                 # collar repair, so colour/outline fixes never move anything
                 geo = os.path.join(w, f"{direction}_{kind}_geom.png")
-                run("clean_sheet.py", sc, geo, "--gentle")
-                run("clean_sheet.py", sc, lk, "--gentle")
+                tumble = {"TUMBLE": "1"} if kind == "roll" else None
+                run("clean_sheet.py", sc, geo, "--gentle", env=tumble)
+                run("clean_sheet.py", sc, lk, "--gentle", env=tumble)
                 geo2 = geo.replace(".png", "_h.png")
                 geo3 = geo.replace(".png", "_l.png")
-                if kind == "run":
+                if kind != "walk":
                     # a run is kept exactly as Sprixen's locked camera drew it (one uniform scale):
                     # per-frame head/leg fitting moves the airborne frames and makes the head pop
                     shutil.copy(geo, geo2)
@@ -180,16 +187,17 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
             if not head_lock:   # Sprixen-style: give every frame the approved drawing's outline
                 print(run("ink_outline.py", lk, d["base"], lk,
                           env={"OUTLINE_WEIGHT": str(cfg.get("style", {}).get("outline_weight", 1)),
-                               **({"STRICT_ROWS": "1"} if kind == "run" else {})}).stdout.strip())
-            fps = round(frames / (cycle if kind == "walk" else cfg.get("run_cycle_seconds", 0.55)), 2)
+                               **({"STRICT_ROWS": "1"} if kind != "walk" else {})}).stdout.strip())
+            fps = round(frames / {"walk": cycle, "run": cfg.get("run_cycle_seconds", 0.55),
+                                  "roll": cfg.get("roll_seconds", 0.36)}[kind], 2)
             strip = os.path.join(ART, f"{prefix}_{direction}_{kind}.png")
-            fixed = {"PLACE_FIXED": "1"} if kind == "run" else {}
+            fixed = ({"PLACE_FIXED": "1"} if kind != "walk" else {}) | ({"ONESHOT": "1"} if kind == "roll" else {})
             run("build_walk_strip.py", lk, strip, H, fps,
                 env={"BASE_H": base_h, **fixed, **({} if head_lock else {"PLACE_FROM": geo3})})
             if not head_lock:
                 # reference: Sprixen's own frames with the same geometry and no clean-up (qa_fidelity.py)
                 rf = os.path.join(w, f"{direction}_{kind}_ref.png")
-                if kind == "run":
+                if kind != "walk":
                     shutil.copy(sc, rf)
                 else:
                     run("match_head.py", sc, d["base"], rf, prof, env={"GEOM_SHEET": geo})
@@ -199,9 +207,10 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
                     env={"BASE_H": base_h, "PLACE_FROM": geo3, "REINK": "0", **fixed})
             if not head_lock and direction == "side":
                 pass   # the near-glove size is matched after the idle strip exists (below)
-            run("masks.py", strip, strip.replace(".png", "_mask.png"), head_px)   # skin/hair for recolouring
+            run("masks.py", strip, strip.replace(".png", "_mask.png"), head_px,   # skin/hair for recolouring
+                env={"TUMBLE": "1"} if kind == "roll" else None)
             manifest[f"{kind}_{direction}"] = {"frames": frames, "fps": fps,
-                                               **({"cell_w": RUN_CELL_W} if kind == "run" and RUN_CELL_W else {})}
+                                               **({"cell_w": RUN_CELL_W} if kind != "walk" and RUN_CELL_W else {})}
             strips[kind] = strip
             print(f"{kind}_{direction}: {out}")
 
@@ -220,19 +229,21 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
                 # near hand: one size in every walk frame, measured from the approved standing drawing
                 print(run("match_glove.py", strip, istrip).stdout.strip())
             # one-frame blinks / dents in the upper body (what qa_shape.py checks), two passes
-            mt = {"MOTION_TOL": "2" if kind == "run" else "1"}
+            mt = {"MOTION_TOL": "2" if kind != "walk" else "1"}
             steps = (["deflicker"] * 3 + ["fix"] + ["deflicker"] * 2 + ["fix", "deflicker"]) if kind == "walk" \
                 else ["static", "static", "fix", "static"]   # runs: no blending between frames
             for k, st in enumerate(steps):
                 if os.environ.get("DEBUG_STAGES"):
                     shutil.copy(strip, f"/tmp/stage_{direction}_{kind}_{k}.png")
                 if st == "static":
-                    print(run("deflicker.py", strip, env={"REF_STRIP": rfp, "NO_TEMPORAL": "1", **mt}).stdout.strip())
+                    print(run("deflicker.py", strip, env={"REF_STRIP": rfp, "NO_TEMPORAL": "1", **mt,
+                                                          **({"TUMBLE": "1"} if kind == "roll" else {})}).stdout.strip())
                 elif st == "fix":
                     print(run("qa_fidelity.py", strip, rfp, "--fix").stdout.strip())
                 else:
                     print(run("deflicker.py", strip, env={"REF_STRIP": rfp, **mt}).stdout.strip())
-            run("masks.py", strip, strip.replace(".png", "_mask.png"), head_px)
+            run("masks.py", strip, strip.replace(".png", "_mask.png"), head_px,
+                env={"TUMBLE": "1"} if kind == "roll" else None)
         if direction == "side" and extra_idles:
             for x in cfg.get("extra_idles", []):
                 xo = os.path.join(ART, x["out"])
@@ -271,8 +282,8 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
     # ---- QA
     ok = True
     for direction in ("side", "down", "up"):
-        for kind in ("walk", "idle", "run"):
-            if kind == "run" and direction not in cfg.get("runs", {}):
+        for kind in ("walk", "idle", "run", "roll"):
+            if kind in ("run", "roll") and direction not in cfg.get(kind + "s", {}):
                 continue
             r = run("qa_strip.py", os.path.join(ART, f"{prefix}_{direction}_{kind}.png"),
                     f"{prefix}_{direction}_{kind}", round(H * K), kind)
@@ -290,7 +301,8 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
             ok &= r.returncode == 0
             r = run("qa_shape.py", os.path.join(ART, f"{prefix}_{direction}_{kind}.png"),
                     os.path.join(ART, f"{prefix}_{direction}_idle.png"), f"{prefix}_{direction}_{kind}",
-                    env={"MOTION_TOL": "2" if kind == "run" else "1", "REF_STRIP": refs[(direction, kind)]})
+                    env={"MOTION_TOL": "2" if kind != "walk" else "1", "REF_STRIP": refs[(direction, kind)],
+                         **({"TUMBLE": "1"} if kind == "roll" else {})})
             for line in r.stdout.splitlines():
                 if line.startswith("==") or "FAIL" in line or "RESULT" in line:
                     print(line)

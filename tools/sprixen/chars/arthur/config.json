@@ -67,5 +67,30 @@
     }
   },
   "run_cycle_seconds": 0.55,
-  "run_cell_w": 240
+  "run_cell_w": 240,
+  "rolls": {
+    "side": {
+      "raw": "raw/roll_side.png",
+      "frames": [
+        37,
+        83
+      ]
+    },
+    "down": {
+      "raw": "raw/roll_down.png",
+      "frames": [
+        34,
+        77
+      ]
+    },
+    "up": {
+      "raw": "raw/roll_up.png",
+      "frames": [
+        12,
+        54
+      ]
+    }
+  },
+  "roll_frames": 18,
+  "roll_seconds": 0.36
 }

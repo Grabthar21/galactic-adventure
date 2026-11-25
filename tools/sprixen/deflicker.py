@@ -17,7 +17,7 @@ from PIL import Image
 from scipy import ndimage
 
 sys.path.insert(0, __import__("os").path.dirname(__file__))
-from cells import CELL_W as CW
+from cells import CELL_W as CW, K
 from qa_shape import upper, notches, big_notches, MIN_BLINK, MIN_DENT
 
 LINE = np.array([81, 56, 47], np.float32)   # approved drawing's line colour
@@ -120,7 +120,7 @@ def main():
         w = w[..., None]
         out[i] = fr[i] * (1 - w) + avg * w
         fixed.append(int(d.sum() + dent.sum()))
-    from qa_shape import slivers, torso_slivers, arm_strands, grey_gaps, cuffs, inner_halo, boot_gaps
+    from qa_shape import slivers, torso_slivers, arm_strands, grey_gaps, cuffs, inner_halo, boot_gaps, semi_pockets
     import os
     rp = os.environ.get("REF_STRIP")
     refc = None
@@ -150,8 +150,12 @@ def main():
         f[m, :3] = col
         f[m, 3] = 255
 
+    tumble_strip = bool(_os.environ.get("TUMBLE"))   # rolls: no rules tied to where the belt/arms/boots sit
     for i in range(n):
         f = out[i]
+        # ...except in a roll's take-off and landing frames, which stand upright (>= ~82% of the 133-game-px height)
+        ys_t = np.where((f[..., 3] > 128).any(1))[0]
+        tumble = tumble_strip and not (len(ys_t) and ys_t.max() - ys_t.min() >= 109 * K)
         # light specks sticking out of the hair line / head edge: take the colour of the dark
         # (hair / outline) pixels around them
         sp = slivers(f, 1 if temporal else 2)
@@ -159,10 +163,11 @@ def main():
         ys_ = np.where(s_.any(1))[0]
         crown = np.zeros_like(s_)
         crown[ys_.min():ys_.min() + int(0.09 * (ys_.max() - ys_.min()))] = True
-        sp |= crown & (f[..., 3] > 60) & (f[..., :3].mean(2) > 170)     # light specks in the hair
-        ts = torso_slivers(f)
-        f[ts] = 0                          # backdrop strand under the arm: cleared
-        st = arm_strands(f) | grey_gaps(f)
+        if not tumble:
+            sp |= crown & (f[..., 3] > 60) & (f[..., :3].mean(2) > 170)     # light specks in the hair
+            ts = torso_slivers(f)
+            f[ts] = 0                          # backdrop strand under the arm: cleared
+        st = arm_strands(f) | grey_gaps(f) if not tumble else np.zeros(f.shape[:2], bool)
         if not temporal:
             st &= ~cuffs(f, st)
         if st.any():
@@ -200,7 +205,7 @@ def main():
                     f[c_] = 0
                 else:
                     fill(f, c_, i)
-        if not temporal:
+        if not temporal and not tumble:
             # backdrop between the boots: see-through where it opens to the outside, else the
             # dark line colour (two outlines meeting)
             bg = boot_gaps(f)
@@ -214,7 +219,7 @@ def main():
                     else:
                         f[c_, :3] = LINE
                         f[c_, 3] = 255
-        if not temporal and refc is not None:
+        if not temporal and refc is not None and not tumble:
             hm, col = inner_halo(f, refc[i][..., 3])
             f[hm, :3] = col[hm]
         if sp.any():
@@ -238,7 +243,7 @@ def main():
         rgbf = f[..., :3]
         shirt_ = sol & (rgbf.min(2) > 175) & (rgbf[..., 0] >= rgbf[..., 2])
         ysu = np.where(sol.any(1))[0]
-        for j in range(1, ns + 1):
+        for j in range(1, ns + 1 if not tumble else 1):
             sm = slits == j
             if sm.sum() > 80 or np.where(sm)[0].mean() > ysu.min() + 0.55 * (ysu.max() - ysu.min()):
                 continue

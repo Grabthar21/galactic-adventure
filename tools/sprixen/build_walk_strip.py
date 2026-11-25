@@ -60,7 +60,7 @@ def main():
     # snapping every frame's lowest pixel to the ground jerks the airborne frames down.
     fixed = os.environ.get("PLACE_FIXED") == "1"
     if fixed:
-        fx_torso = float(np.median([d["torso"] for d in info]))
+        fx_torso = float(np.nanmedian([d["torso"] for d in info]))   # a tucked roll frame can be shorter than the torso band
         fx_bot = max(d["bot"] for d in info)
     for i, (f, d) in enumerate(zip(frames, info)):
         s = base
@@ -69,6 +69,14 @@ def main():
         # place: torso centre -> CENTER_X, feet bottom -> FOOT_Y
         px = round(i * CELL_W + CENTER_X - (fx_torso if fixed else d["torso"]) * s)
         py = round(FOOT_Y - (fx_bot if fixed else d["bot"]) * s)
+        if fixed and os.environ.get("ONESHOT") == "1" and len(info) > 1:
+            # a one-shot move (roll) starts and ends standing: the ground line follows Sprixen's
+            # camera drift from the first frame's feet to the last frame's, so both are on the
+            # ground; no frame goes below it
+            t_ = i / (len(info) - 1)
+            gy = (1 - t_) * info[0]["bot"] + t_ * info[-1]["bot"]
+            py = round(FOOT_Y - gy * s)
+            py = min(py, round(FOOT_Y - d["bot"] * s))
         if fixed:
             py = max(py, 3 - round(d["top"] * s))   # the hair of the highest frames stays inside the cell
         cell = Image.new("RGBA", (CELL_W * n, CELL_H), (0, 0, 0, 0))

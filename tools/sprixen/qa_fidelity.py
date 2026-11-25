@@ -65,7 +65,9 @@ def main():
         face[t + int(.07 * (b - t)):t + int(.21 * (b - t))] = True
         sk = skin(r) | skin(f)
         near_face = ndimage.binary_dilation(sk & face, iterations=4)
-        ch |= face & near_face & (f[..., 3] > 128) & (r[..., 3] > 200) & (d > 60)
+        # (Sprixen's half see-through pale fringe on the edge, alpha < 240, may take the line colour;
+        #  eye whites are fully solid in Sprixen's frame)
+        ch |= face & near_face & (f[..., 3] > 128) & (r[..., 3] >= 240) & (d > 60)
         lab, k = ndimage.label(ch)
         if "--fix" in sys.argv:
             # put Sprixen's own drawing back in patches the clean-up changed by mistake

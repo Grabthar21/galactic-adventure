@@ -8,6 +8,11 @@
   "fps": 32.73,
   "cell_w": 240
  },
+ "roll_side": {
+  "frames": 18,
+  "fps": 50.0,
+  "cell_w": 240
+ },
  "idle_side": {
   "frames": 32,
   "fps": 12
@@ -21,6 +26,11 @@
   "fps": 47.27,
   "cell_w": 240
  },
+ "roll_down": {
+  "frames": 18,
+  "fps": 50.0,
+  "cell_w": 240
+ },
  "idle_down": {
   "frames": 32,
   "fps": 12
@@ -32,6 +42,11 @@
  "run_up": {
   "frames": 23,
   "fps": 41.82,
+  "cell_w": 240
+ },
+ "roll_up": {
+  "frames": 18,
+  "fps": 50.0,
   "cell_w": 240
  },
  "idle_up": {

@@ -42,7 +42,12 @@ def cell_masks(c, head_rows):
     ys = np.where(solid.any(1))[0]
     top = ys.min() if len(ys) else 0
     head = np.zeros_like(solid)
-    head[top:top + head_rows] = True
+    import os
+    if not os.environ.get("TUMBLE"):
+        head[top:top + head_rows] = True
+    # TUMBLE (rolls): the head is not at the top of an upside-down frame, and hair, gloves, vest
+    # and boots are the same brown, so no hair is marked there (skin still is): a chosen hair
+    # colour shows its original chestnut for the 0.36 s of a roll
     core = (hairish > 0.5) & head & solid
     lab, n = ndimage.label(core, structure=np.ones((3, 3)))
     keep = np.zeros_like(core)

@@ -78,7 +78,9 @@ def main():
             hy, hx = np.where(holes == k)
             if sz <= 12 * K * K:   # same limit as resample.fill_pinholes; bigger = real arm/leg gap
                 fails.append(f"frame {i}: pinhole {sz}px at ({int(hx.mean())},{int(hy.mean())})")
-            elif hy.mean() < top + 0.45 * (bot - top) and sz < 40 * K * K:
+            elif hy.mean() < top + 0.45 * (bot - top) and sz < 40 * K * K and kind != "roll":
+                # (a roll turns over: the top of the frame can be the legs; holes we made in a
+                # roll are caught by qa_shape.py's check against Sprixen's own frames)
                 fails.append(f"frame {i}: see-through hole {sz}px in head/chest at ({int(hx.mean())},{int(hy.mean())})")
             else:
                 notes.append(f"frame {i}: {sz}px gap at ({int(hx.mean())},{int(hy.mean())}) - arm/leg gap, ok")
@@ -89,7 +91,7 @@ def main():
             specks = [int(s) for s in sizes if s < main]
             if specks:
                 fails.append(f"frame {i}: {len(specks)} stray speck(s), largest {max(specks)}px")
-        if kind == "run":
+        if kind in ("run", "roll"):
             bots.append(bot)          # a run leaves the ground; checked for the whole strip below
         elif bot != FOOT_Y:
             fails.append(f"frame {i}: feet at row {bot}, not on the ground row {FOOT_Y}")
@@ -109,6 +111,22 @@ def main():
         fails.append(f"run height varies {H.min():.0f}-{H.max():.0f}px")
     if kind == "walk" and H.max() - H.min() > 8 * K:
         fails.append(f"walk height varies {H.min():.0f}-{H.max():.0f}px")
+    if kind == "roll":
+        # a roll tumbles: no height or head rules. It must start and end standing on the ground,
+        # never sink below it, and the body must travel smoothly (no frame-to-frame jumps)
+        if max(bots) > FOOT_Y:
+            fails.append(f"roll goes below the ground row ({max(bots)} > {FOOT_Y})")
+        for i in (0, n - 1):
+            if bots[i] < FOOT_Y - 2:
+                fails.append(f"roll frame {i} (take-off/landing) not on the ground (row {bots[i]})")
+        cy, cx = [], []
+        for f in frames_rgba:
+            yy, xx = np.nonzero(f[..., 3] >= 128)
+            cy.append(yy.mean()); cx.append(xx.mean())
+        step = np.hypot(np.diff(cx), np.diff(cy))
+        if step.max() > 14 * K:
+            fails.append(f"roll jumps {step.max():.0f}px between frames {int(step.argmax())}->{int(step.argmax()) + 1}")
+        print(f"   roll: centre path max step {step.max():.1f}px, feet {min(bots)}-{max(bots)}")
     if kind == "run":
         # feet: never below the ground; the planted frames on it; airborne frames lifted a little
         if max(bots) > FOOT_Y:
@@ -138,7 +156,7 @@ def main():
                 fails.append(f"head pops {jy[i]:.0f}px up/down between frames {i}->{(i + 1) % n}")
         print(f"   head x {hx.min():.1f}-{hx.max():.1f} (max step {jx.max():.1f}), head top {hy.min():.0f}-{hy.max():.0f} (max step {jy.max():.0f}), feet {min(bots)}-{max(bots)}")
     jumps = np.abs(np.diff(np.r_[C, C[0]]))
-    if kind != "run" and jumps.max() > 2.5 * K:
+    if kind not in ("run", "roll") and jumps.max() > 2.5 * K:
         fails.append(f"body centre jumps {jumps.max():.1f}px between frames {int(jumps.argmax())}->{(int(jumps.argmax()) + 1) % n}")
     # head shape stability (IoU vs median frame)
     ref = heads[n // 2]

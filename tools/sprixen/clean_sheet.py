@@ -138,6 +138,15 @@ def clean_gentle(f):
         colour (white/lavender) is blended into the edge,
       - tiny enclosed holes (<= 12 px) are filled; the far-arm see-through is made solid.
     """
+    import os
+    # TUMBLE (rolls): the body turns upside down, so every rule that knows where the collar, the
+    # belt or the head is (by height in the frame) is off; only the matte itself is cleaned
+    upright = not os.environ.get("TUMBLE")
+    if not upright:
+        ys_ = np.where((f[:, :, 3] > 60).any(1))[0]
+        # the take-off and landing frames of a roll stand upright (nearly full height): the usual
+        # collar/belt rules apply to them, so the nape never shows the background
+        upright = len(ys_) > 0 and ys_.max() - ys_.min() >= 175
     a = f[:, :, 3].copy()
     rgb = f[:, :, :3]
     cool = (rgb.min(2) > 140) & (rgb[:, :, 0] < np.maximum(rgb[:, :, 1], rgb[:, :, 2]) - 2)
@@ -153,7 +162,7 @@ def clean_gentle(f):
     # enclosed gaps in the head/chest (the collar Sprixen made see-through between nape and vest):
     # painted in smoothly from their surroundings, so the background never flashes through.
     ys = np.where(solid.any(1))[0]
-    if len(ys):
+    if len(ys) and upright:
         y0, y1 = ys.min(), ys.max()
         holes, n = ndimage.label(ndimage.binary_fill_holes(a >= 60) & ~(a >= 200))
         for k in range(1, n + 1):
@@ -196,6 +205,27 @@ def clean_gentle(f):
             rgb = rgb.copy()
             rgb[deep] = rgb[gy[deep], gx[deep]]
         inner &= ~(pale_semi & near_out)
+    if os.environ.get("TUMBLE"):
+        # rolls (every frame, upright or not): a mostly see-through patch inside the outline is a real gap between limbs drawn
+        # with motion blur, not the far arm: kept see-through instead of made solid in muddy colours
+        sat_ = rgb.max(2) - rgb.min(2)
+        semi_ = inner & ((a < 128) | ((a < 210) & (rgb.min(2) > 150)))
+        lab_, n_ = ndimage.label(semi_)
+        for k_ in range(1, n_ + 1):
+            c_ = lab_ == k_
+            if c_.sum() >= 20:
+                a[c_] = 0
+                inner &= ~c_
+        # ...and the same pale see-through backdrop on the silhouette's edge (a gap open to the
+        # outside): a thick patch is cleared, not recoloured from the body next to it (which made
+        # a dark blob). Thin 1-2px anti-aliasing along the outline is left alone.
+        pale_e = (a > 0) & (a < 210) & (rgb.min(2) > 150) & ~inner
+        pale_e = ndimage.binary_opening(pale_e, structure=np.ones((3, 3)))
+        lab_, n_ = ndimage.label(pale_e)
+        for k_ in range(1, n_ + 1):
+            c_ = lab_ == k_
+            if c_.sum() >= 9:
+                a[ndimage.binary_dilation(c_) & (a < 210) & (rgb.min(2) > 150)] = 0
     a[inner] = 255
     # pale bluish-white patches next to the outside are Sprixen's old backdrop showing in the gaps
     # between arm and body (the shirt is a warm white, never bluish): cleared
@@ -204,7 +234,7 @@ def clean_gentle(f):
     coolw = (a > 0) & (rgb.min(2) > 150) & (rgb[:, :, 2] >= rgb[:, :, 0] + 3) \
         & (rgb.max(2) - rgb.min(2) < 30)
     lab, nl = ndimage.label(coolw)
-    if nl:
+    if nl and upright:
         near_out = ndimage.binary_dilation(outside, iterations=3)
         solid_wo = (a >= 200) & ~coolw
         gaps = ndimage.binary_fill_holes(solid_wo) & ~solid_wo        # enclosed gaps (arm/body, legs)
@@ -223,7 +253,7 @@ def clean_gentle(f):
     rows = np.where(navy.sum(1) > 20)[0]                     # trousers (wide), not the neckerchief
     if len(ysb):
         rows = rows[rows > ysb.min() + 0.42 * (ysb.max() - ysb.min())]
-    if len(rows):
+    if len(rows) and upright:
         belt = rows.min()
         sat = rgb.max(2) - rgb.min(2)
         pale = (a > 0) & (rgb.min(2) > 130) & (sat < 45)
@@ -259,7 +289,7 @@ def clean_gentle(f):
     hair = body & (rgb[:, :, 0] > rgb[:, :, 2] + 25) & (rgb.mean(2) < 150) & (rgb[:, :, 0] < 190)
     lightp = body & (rgb.min(2) > 140)
     lab, nl = ndimage.label(lightp)
-    if nl:
+    if nl and upright:
         sizes = ndimage.sum(lightp, lab, range(1, nl + 1))
         _, (hy, hx) = ndimage.distance_transform_edt(~hair, return_indices=True)
         rgb = rgb.copy()
@@ -282,7 +312,7 @@ def clean_gentle(f):
     semi = (a0 >= 20) & (a0 < 230) & (a >= 245)
     sat = rgb.max(2) - rgb.min(2)
     lightop = (a0 >= 230) & (rgb.min(2) > 170)
-    if semi.any() and lightop.any():
+    if semi.any() and lightop.any() and upright:
         dl, (ly, lx) = ndimage.distance_transform_edt(~lightop, return_indices=True)
         ysb = np.where(a.max(1) >= 200)[0]
         collar_band = np.zeros_like(semi)
