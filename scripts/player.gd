@@ -22,12 +22,13 @@ const DEFAULT_GAIT := "run"
 var running := false
 # Dodge roll (Space / gamepad A): a short burst a little faster than running. Enemy attacks miss
 # during the roll's i-frames; walls stop it like normal movement (move_and_slide, wall layer 1).
-const ROLL_SPEED_MULT := 1.25   # average roll speed = run speed x1.25 (~268 px/s)
 # The roll bursts off the mark and slows as he comes up: speed falls in a straight line from
-# ROLL_BURST x the average at the start to (2 - ROLL_BURST) x at the end (1.7: ~455 px/s, about
-# 2.1x the run, easing to ~80 px/s). Same distance and time as before.
+# ROLL_BURST x the average at the start to (2 - ROLL_BURST) x at the end. With 192 px in 0.36 s
+# (25 Nov: the distance doubled, same timing) that is ~907 px/s off the mark (about 4.2x the run),
+# easing to ~160 px/s; the average is ~533 px/s.
 const ROLL_BURST := 1.7
-const ROLL_DIST := 96.0         # about 0.85 of Arthur's on-screen height
+const ROLL_TIME := 0.36
+const ROLL_DIST := 192.0        # about 1.7 of Arthur's on-screen heights
 const ROLL_IFRAMES := 0.30      # invulnerable for the first 0.30 s; the last ~0.06 s (getting up) is not
 const ROLL_COOLDOWN := 0.25
 const CELL := Vector2(98, 148) # frame size in the prepared sheets
@@ -53,7 +54,7 @@ var roll_t := 0.0
 var roll_cd := 0.0
 var roll_vec := Vector2.ZERO
 var invuln_t := 0.0
-var roll_time := 0.36           # set in _ready from ROLL_DIST and the roll speed
+var roll_time := ROLL_TIME
 var hurt_t := 0.0
 var knock := Vector2.ZERO
 
@@ -87,7 +88,7 @@ func setup(hero: String) -> void:
 	var base := "arthur" if hero == "arthur_v2" else hero
 	var tex: Texture2D = load("res://art/%s_frames.png" % base)
 	walk_speed = SPEED_V2 if hero == "arthur_v2" else SPEED
-	roll_time = ROLL_DIST / (walk_speed * RUN_MULT * ROLL_SPEED_MULT)
+	roll_time = ROLL_TIME
 	var frames := SpriteFrames.new()
 	frames.remove_animation("default")
 	# Hairstyle: tools/sprixen builds a full strip set per style as art/<hero>__<style>_*

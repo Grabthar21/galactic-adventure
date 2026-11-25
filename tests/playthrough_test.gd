@@ -109,7 +109,7 @@ func _combat_checks() -> void:
 	ok("no damage while rolling", p.hp == hp_before)
 	for i in 30: await physics_frame
 	var dist: float = start.distance_to(p.global_position)
-	ok("roll distance short (~96px)", dist > 80.0 and dist < 112.0, "%.0fpx" % dist)
+	ok("roll distance ~192px", dist > 176.0 and dist < 208.0, "%.0fpx" % dist)
 	p.invuln_t = 0.0
 	p.take_hit(1, p.global_position + Vector2(20, 0))
 	ok("hit lands when not rolling", p.hp == hp_before - 1, "hp %d -> %d" % [hp_before, p.hp])
@@ -162,7 +162,7 @@ func _roll_checks(p, wolves) -> void:
 		if p.state == "roll": v_late = p.velocity.length()
 	Input.action_release("move_right")
 	ok("roll slows as he comes up (end under the run)", v_late < run_speed, "end %.0f px/s" % v_late)
-	ok("roll bursts off the mark (start about 2x the run)", v_roll > run_speed * 1.8 and v_roll < run_speed * 2.4,
+	ok("roll bursts off the mark (start about 4x the run)", v_roll > run_speed * 3.6 and v_roll < run_speed * 4.6,
 		"roll start %.0f vs run %.0f px/s" % [v_roll, run_speed])
 	while p.state == "roll": await physics_frame
 	# the get-up at the end of the roll is not protected
