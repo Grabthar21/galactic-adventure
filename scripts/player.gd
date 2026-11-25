@@ -598,13 +598,13 @@ func weapon_pose() -> Dictionary:
 
 func _update_trail(delta: float) -> void:
 	for t in _trail:
-		t[1] += delta
-	while not _trail.is_empty() and _trail[0][1] > TRAIL_LIFE:
+		t[3] += delta
+	while not _trail.is_empty() and _trail[0][3] > TRAIL_LIFE:
 		_trail.pop_front()
 	var pose := weapon_pose()
 	if pose.is_empty() or state != "attack":
 		return
-	_trail.append([pose.grip + Vector2.from_angle(pose.angle) * pose.length * 0.92, 0.0])
+	_trail.append([pose.grip, pose.angle, pose.length * 0.92, 0.0])
 
 
 func _draw_weapon(back: bool) -> void:
@@ -612,11 +612,21 @@ func _draw_weapon(back: bool) -> void:
 	var pose := weapon_pose()
 	# swing trail, in front of everything
 	if not back and _trail.size() > 1 and weapon != null:
+		# the tip's path between samples follows the swing's curve (grip, angle and reach blended)
+		const SUB := 5
 		for i in range(1, _trail.size()):
-			var f: float = 1.0 - float(_trail[i][1]) / TRAIL_LIFE
-			var col := weapon.trail_color
-			col.a *= f
-			canvas.draw_line(_trail[i - 1][0], _trail[i][0], col, maxf(1.0, weapon.trail_width * f), true)
+			var p0: Array = _trail[i - 1]
+			var p1: Array = _trail[i]
+			var prev: Vector2 = p0[0] + Vector2.from_angle(p0[1]) * p0[2]
+			for k in range(1, SUB + 1):
+				var u := float(k) / SUB
+				var g: Vector2 = (p0[0] as Vector2).lerp(p1[0], u)
+				var tip: Vector2 = g + Vector2.from_angle(lerp_angle(p0[1], p1[1], u)) * lerpf(p0[2], p1[2], u)
+				var f: float = 1.0 - lerpf(p0[3], p1[3], u) / TRAIL_LIFE
+				var col := weapon.trail_color
+				col.a *= f
+				canvas.draw_line(prev, tip, col, maxf(1.0, weapon.trail_width * f), true)
+				prev = tip
 	if pose.is_empty() or bool(pose.behind) != back:
 		return
 	var tex := weapon.texture
