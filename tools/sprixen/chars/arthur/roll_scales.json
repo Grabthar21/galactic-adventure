@@ -1,0 +1,74 @@
+{
+ "side": {
+  "picks": "37,39,42,46,47,50,54,57,58,62,63,66,70,73,74,78,81,83",
+  "scales": "1.0000,1.0000,1.0000,0.9749,0.9749,1.0000,1.0000,1.0000,0.9779,0.9700,0.9700,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000",
+  "measured": [
+   "frame  0: head 0.998 of the run's (head followed through the turn)  -> x1.000",
+   "  frame  1: head 1.002 of the run's (head followed through the turn)  -> x1.000",
+   "  frame  2: head 0.996 of the run's (head followed through the turn)  -> x1.000",
+   "  frame  3: head 1.026 of the run's (head followed through the turn)  -> x0.975",
+   "  frame  4: head 1.051 of the run's (head followed through the turn)  -> x0.975",
+   "  frame  5: head 1.010 of the run's (head followed through the turn)  -> x1.000",
+   "  frame  6: head 0.987 of the run's (head followed through the turn)  -> x1.000",
+   "  frame  7: head 1.006 of the run's (head followed through the turn)  -> x1.000",
+   "  frame  8: head 1.023 of the run's (head followed through the turn)  -> x0.978",
+   "  frame  9: head 1.034 of the run's (head followed through the turn)  -> x0.970",
+   "  frame 10: head 1.031 of the run's (head followed through the turn)  -> x0.970",
+   "  frame 11: head 0.979 of the run's (head followed through the turn)  -> x1.000",
+   "  frame 12: head 0.998 of the run's (head followed through the turn)  -> x1.000",
+   "  frame 13: head 1.002 of the run's (head followed through the turn)  -> x1.000",
+   "  frame 14: head 1.011 of the run's (head followed through the turn)  -> x1.000",
+   "  frame 15: head 1.007 of the run's (head followed through the turn)  -> x1.000",
+   "  frame 16: head 1.014 of the run's (head followed through the turn)  -> x1.000",
+   "  frame 17: head 1.018 of the run's (head followed through the turn)  -> x1.000"
+  ]
+ },
+ "down": {
+  "picks": "34,38,39,42,43,46,50,51,54,58,60,62,64,66,70,71,74,77",
+  "scales": "1.0000,1.0000,1.0000,1.0000,1.0409,1.0687,1.0687,1.0566,1.0000,1.0000,1.0000,1.0000,1.0370,1.0566,1.0566,1.0370,1.0000,1.0275",
+  "measured": [
+   "frame  0: head 1.000 of the run's (head width, upright)  -> x1.000",
+   "  frame  1: head 1.036 of the run's (head width, upright)  -> x1.000",
+   "  frame  2: head nan of the run's (no clear view of the head)  -> x1.000",
+   "  frame  3: head nan of the run's (no clear view of the head)  -> x1.000",
+   "  frame  4: head nan of the run's (no clear view of the head)  -> x1.041",
+   "  frame  5: head nan of the run's (no clear view of the head)  -> x1.069",
+   "  frame  6: head 0.911 of the run's (head width, upside down)  -> x1.069",
+   "  frame  7: head 0.946 of the run's (head width, upside down)  -> x1.057",
+   "  frame  8: head nan of the run's (no clear view of the head)  -> x1.000",
+   "  frame  9: head 1.036 of the run's (head width, upright)  -> x1.000",
+   "  frame 10: head 1.000 of the run's (head width, upright)  -> x1.000",
+   "  frame 11: head nan of the run's (no clear view of the head)  -> x1.000",
+   "  frame 12: head 0.964 of the run's (head width, upright)  -> x1.037",
+   "  frame 13: head 0.946 of the run's (head width, upright)  -> x1.057",
+   "  frame 14: head 0.946 of the run's (head width, upright)  -> x1.057",
+   "  frame 15: head 0.982 of the run's (head width, upright)  -> x1.037",
+   "  frame 16: head 0.964 of the run's (head width, upright)  -> x1.000",
+   "  frame 17: head 0.982 of the run's (head width, upright)  -> x1.028"
+  ]
+ },
+ "up": {
+  "picks": "12,14,16,18,22,25,26,30,31,34,38,40,42,45,46,50,51,54",
+  "scales": "1.0345,1.0345,1.0000,1.0000,1.0000,1.0000,0.9772,0.9740,0.9740,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0204,1.0274,1.0309",
+  "measured": [
+   "frame  0: head nan of the run's (no clear view of the head)  -> x1.034",
+   "  frame  1: head 0.967 of the run's (head width, upright)  -> x1.034",
+   "  frame  2: head 0.983 of the run's (head width, upright)  -> x1.000",
+   "  frame  3: head nan of the run's (no clear view of the head)  -> x1.000",
+   "  frame  4: head nan of the run's (no clear view of the head)  -> x1.000",
+   "  frame  5: head nan of the run's (no clear view of the head)  -> x1.000",
+   "  frame  6: head nan of the run's (no clear view of the head)  -> x0.977",
+   "  frame  7: head 1.033 of the run's (head width, upside down)  -> x0.974",
+   "  frame  8: head nan of the run's (no clear view of the head)  -> x0.974",
+   "  frame  9: head nan of the run's (no clear view of the head)  -> x1.000",
+   "  frame 10: head nan of the run's (no clear view of the head)  -> x1.000",
+   "  frame 11: head nan of the run's (no clear view of the head)  -> x1.000",
+   "  frame 12: head nan of the run's (no clear view of the head)  -> x1.000",
+   "  frame 13: head nan of the run's (no clear view of the head)  -> x1.000",
+   "  frame 14: head nan of the run's (no clear view of the head)  -> x1.000",
+   "  frame 15: head nan of the run's (no clear view of the head)  -> x1.020",
+   "  frame 16: head nan of the run's (no clear view of the head)  -> x1.027",
+   "  frame 17: head 0.967 of the run's (head width, upright)  -> x1.031"
+  ]
+ }
+}

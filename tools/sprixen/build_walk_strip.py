@@ -62,21 +62,35 @@ def main():
     if fixed:
         fx_torso = float(np.nanmedian([d["torso"] for d in info]))   # a tucked roll frame can be shorter than the torso band
         fx_bot = max(d["bot"] for d in info)
+    # FRAME_SCALES (rolls): a size correction per frame, from roll_scale.py's measurements, so
+    # every frame is drawn at the same body size. A frame is resized about its centre of mass,
+    # or about its feet when it stands on the ground.
+    fsc = [float(v) for v in os.environ["FRAME_SCALES"].split(",")] if os.environ.get("FRAME_SCALES") else None
     for i, (f, d) in enumerate(zip(frames, info)):
-        s = base
+        s0 = base
+        s = base * (fsc[i] if fsc else 1.0)
         w2, h2 = round(SRC * s), round(SRC * s)
         big = downscale(f, w2, h2)
-        # place: torso centre -> CENTER_X, feet bottom -> FOOT_Y
-        px = round(i * CELL_W + CENTER_X - (fx_torso if fixed else d["torso"]) * s)
-        py = round(FOOT_Y - (fx_bot if fixed else d["bot"]) * s)
+        # place: torso centre -> CENTER_X, feet bottom -> FOOT_Y (worked out at the strip's scale s0)
+        px = round(i * CELL_W + CENTER_X - (fx_torso if fixed else d["torso"]) * s0)
+        py = round(FOOT_Y - (fx_bot if fixed else d["bot"]) * s0)
         if fixed and os.environ.get("ONESHOT") == "1" and len(info) > 1:
             # a one-shot move (roll) starts and ends standing: the ground line follows Sprixen's
             # camera drift from the first frame's feet to the last frame's, so both are on the
             # ground; no frame goes below it
             t_ = i / (len(info) - 1)
             gy = (1 - t_) * info[0]["bot"] + t_ * info[-1]["bot"]
-            py = round(FOOT_Y - gy * s)
-            py = min(py, round(FOOT_Y - d["bot"] * s))
+            py = round(FOOT_Y - gy * s0)
+            py = min(py, round(FOOT_Y - d["bot"] * s0))
+        if s != s0:
+            # size correction: the anchor (centre of mass, or the feet when this frame is on the
+            # ground) stays exactly where the uncorrected frame had it
+            a_ = alpha(pframes[i]); yy_, xx_ = np.nonzero(a_)
+            ax, ay = xx_.mean(), yy_.mean()
+            if py + d["bot"] * s0 >= FOOT_Y - 2:
+                ay = d["bot"]
+            px = round(px + ax * (s0 - s))
+            py = round(py + ay * (s0 - s))
         if fixed:
             py = max(py, 3 - round(d["top"] * s))   # the hair of the highest frames stays inside the cell
         cell = Image.new("RGBA", (CELL_W * n, CELL_H), (0, 0, 0, 0))

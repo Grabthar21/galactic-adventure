@@ -205,6 +205,26 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
                 refs[(direction, kind)] = os.path.join(w, f"{direction}_{kind}_ref_strip.png")
                 run("build_walk_strip.py", rf, refs[(direction, kind)], H, fps,
                     env={"BASE_H": base_h, "PLACE_FROM": geo3, "REINK": "0", **fixed})
+            if kind == "roll":
+                # every frame the same body size: the head is measured in each frame against the
+                # run's head (roll_scale.py) and each frame resized to match; measured once and kept
+                # in chars/<name>/roll_scales.json (delete an entry, or RESCALE=1, to measure again)
+                sp = os.path.join(cdir, "roll_scales.json")
+                known = json.load(open(sp)) if os.path.exists(sp) else {}
+                picks = open(loop + ".picks").read().strip()
+                if known.get(direction, {}).get("picks") != picks or os.environ.get("RESCALE"):
+                    rs, re_ = moves[direction]["frames"]
+                    rep = run("roll_scale.py", strip, direction, raw, rs, re_, "--picks", picks, "--report").stdout.strip()
+                    print(f"roll size, {direction} (as Sprixen drew it):\n{rep}")
+                    known[direction] = {"picks": picks, "scales": rep.splitlines()[-1],
+                                        "measured": rep.splitlines()[:-1]}
+                    json.dump(known, open(sp, "w"), indent=1)
+                fsc = {"FRAME_SCALES": known[direction]["scales"]}
+                run("build_walk_strip.py", lk, strip, H, fps,
+                    env={"BASE_H": base_h, **fixed, **fsc, **({} if head_lock else {"PLACE_FROM": geo3})})
+                if not head_lock:
+                    run("build_walk_strip.py", rf, refs[(direction, kind)], H, fps,
+                        env={"BASE_H": base_h, "PLACE_FROM": geo3, "REINK": "0", **fixed, **fsc})
             if not head_lock and direction == "side":
                 pass   # the near-glove size is matched after the idle strip exists (below)
             run("masks.py", strip, strip.replace(".png", "_mask.png"), head_px,   # skin/hair for recolouring
@@ -291,6 +311,12 @@ def build_set(name, prefix, cfg, cdir, base_files, extra_idles=True, body_h=None
                 if line.startswith("==") or "FAIL" in line or "RESULT" in line:
                     print(line)
             ok &= r.returncode == 0
+            if kind == "roll":     # body size: the head the same size as in the run, frame by frame
+                r = run("roll_scale.py", "--check", os.path.join(ART, f"{prefix}_{direction}_{kind}.png"), direction)
+                for line in r.stdout.splitlines():
+                    if line.startswith("==") or "FAIL" in line or "RESULT" in line:
+                        print(line)
+                ok &= r.returncode == 0
     if not cfg.get("style", {}).get("head_lock", True):
         for direction, kind in refs:
             r = run("qa_fidelity.py", os.path.join(ART, f"{prefix}_{direction}_{kind}.png"),
