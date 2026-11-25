@@ -22,7 +22,11 @@ const DEFAULT_GAIT := "run"
 var running := false
 # Dodge roll (Space / gamepad A): a short burst a little faster than running. Enemy attacks miss
 # during the roll's i-frames; walls stop it like normal movement (move_and_slide, wall layer 1).
-const ROLL_SPEED_MULT := 1.25   # roll speed = run speed x1.25 (~268 px/s)
+const ROLL_SPEED_MULT := 1.25   # average roll speed = run speed x1.25 (~268 px/s)
+# The roll bursts off the mark and slows as he comes up: speed falls in a straight line from
+# ROLL_BURST x the average at the start to (2 - ROLL_BURST) x at the end (1.7: ~455 px/s, about
+# 2.1x the run, easing to ~80 px/s). Same distance and time as before.
+const ROLL_BURST := 1.7
 const ROLL_DIST := 96.0         # about 0.85 of Arthur's on-screen height
 const ROLL_IFRAMES := 0.30      # invulnerable for the first 0.30 s; the last ~0.06 s (getting up) is not
 const ROLL_COOLDOWN := 0.25
@@ -321,8 +325,14 @@ func _physics_process(delta: float) -> void:
 					combo = 0
 			fx.queue_redraw()
 		"roll":
+			# distance covered so far: ROLL_DIST * (B*u - (B-1)*u^2), u = share of the roll's time;
+			# this frame's velocity moves exactly the step between, whatever the frame rate
+			var u0: float = clampf(roll_t / roll_time, 0.0, 1.0)
 			roll_t += delta
-			velocity = roll_vec * (ROLL_DIST / roll_time)
+			var u1: float = clampf(roll_t / roll_time, 0.0, 1.0)
+			var step: float = ROLL_DIST * ((ROLL_BURST * u1 - (ROLL_BURST - 1.0) * u1 * u1)
+				- (ROLL_BURST * u0 - (ROLL_BURST - 1.0) * u0 * u0))
+			velocity = roll_vec * (step / maxf(delta, 0.0001))
 			if not _has_roll_art():   # placeholder until the roll strips exist: spin the sprite
 				sprite.rotation = (roll_t / roll_time) * TAU * (1.0 if roll_vec.x >= 0.0 else -1.0)
 			if roll_t >= roll_time:

@@ -156,9 +156,14 @@ func _roll_checks(p, wolves) -> void:
 	for i in 6:
 		await physics_frame
 		if p.state == "roll": v_roll = maxf(v_roll, p.velocity.length())
+	var v_late := v_roll
+	while p.state == "roll":
+		await physics_frame
+		if p.state == "roll": v_late = p.velocity.length()
 	Input.action_release("move_right")
-	ok("roll a little faster than running (1.1-1.4x)", v_roll > run_speed * 1.1 and v_roll < run_speed * 1.4,
-		"roll %.0f vs run %.0f px/s" % [v_roll, run_speed])
+	ok("roll slows as he comes up (end under the run)", v_late < run_speed, "end %.0f px/s" % v_late)
+	ok("roll bursts off the mark (start about 2x the run)", v_roll > run_speed * 1.8 and v_roll < run_speed * 2.4,
+		"roll start %.0f vs run %.0f px/s" % [v_roll, run_speed])
 	while p.state == "roll": await physics_frame
 	# the get-up at the end of the roll is not protected
 	p.invuln_t = 0.0; p.state = "move"
