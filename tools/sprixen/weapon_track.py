@@ -17,8 +17,8 @@ slashes) and split afterwards.
 
 Steps (build_char.py calls them):
   prep <raw.png> <segments.json> <combo_raw.png> <raw_track.json>
-      segments.json: {"attack1": [s, e, count], ..., "attack_rec": [s, e, count]} (raw frame numbers;
-      e < s plays backwards). Writes the picked frames, weapon erased (256px cells), and the track
+      segments.json: {"attack1": [s, e, count(, [skip frames])], ..., "attack_rec": [...]} (raw
+      frame numbers; e < s plays backwards). Writes the picked frames, weapon erased (256px cells), and the track
       in raw-frame pixels.
   finish <combo_strip.png> <combo_raw.png> <raw_track.json> <segments.json> <out_prefix> <fps.json>
       splits the built strip (+ its _mask) into <out_prefix>_attack1.png ... _attack_rec.png and
@@ -40,20 +40,30 @@ SRC = 256
 
 def green_masks(f):
     r, g, b, a = (f[..., i].astype(int) for i in range(4))
-    strong = (g > r + 30) & (g > b + 30) & (a > 100)
+    # lime to olive green (Sprixen paints the stand-in anywhere from bright lime to a dull olive):
+    # clearly greener than red, far greener than blue -- nothing on him is
+    strong = (g >= r + 10) & (g >= b + 35) & (a > 100)
     # weak green: the blade's dark outline, the olive hilt, antialiased edges -- only next to
     # strong green, so nothing greenish elsewhere on him is touched (his browns, skin and gold
     # are all redder than they are green)
-    weak = (g >= r + 4) & (g > b + 12) & (a > 10)
+    weak = (g >= r + 3) & (g > b + 12) & (a > 10)
     near = ndimage.binary_dilation(strong, iterations=8)
-    return strong, (weak & near) | strong
+    full = (weak & near) | strong
+    # a smeared, half-blended stretch of the stand-in (olive over his clothes) far from the
+    # solid blade: a patch of weak green that is still clearly green on the whole
+    lab, n = ndimage.label(weak & ~full)
+    for k in range(1, n + 1):
+        m = lab == k
+        if m.sum() >= 20 and np.median((g - b)[m]) >= 35 and np.median((g - r)[m]) >= 5:
+            full |= m
+    return strong, full
 
 
 def cool_pale(f):
     """Sprixen's white motion smear: a cool or greenish white (the shirt's white, the skin and
     the gold are all warm: more red than green)."""
     r, g, b, a = (f[..., i].astype(int) for i in range(4))
-    return (a > 60) & (r > 160) & (g >= r - 2) & (b >= r - 40) & ~((g > r + 30) & (g > b + 30))
+    return (a > 60) & (r > 160) & (g >= r - 2) & (b >= r - 40) & ~((g >= r + 10) & (g >= b + 35))
 
 
 def _thin(strong):
@@ -146,7 +156,7 @@ def fit_blade(strong, body=None):
 def erase(f, full):
     """Remove the green blade (+ smears): where it crossed the body, fill the body back in."""
     out = f.copy()
-    m = ndimage.binary_dilation(full, iterations=2)
+    m = ndimage.binary_dilation(full, iterations=3)
     if not m.any():
         return out, m
     m8 = m.astype(np.uint8) * 255
@@ -231,8 +241,11 @@ def prep(raw_path, seg_path, out_path, track_path):
     bad = set(np.where((cools > max(1400, 6 * np.median(cools))) | (pales > 2 * np.median(pales))
                        | (areas < 0.85 * np.median(areas)))[0].tolist())
     picks, names = [], []
-    for name, (s, e, count) in segs.items():
-        p = seg_frames(s, e, count, bad)
+    for name, seg in segs.items():
+        s, e, count = seg[:3]
+        # an optional 4th entry lists raw frames to leave out by hand (a smear on him the
+        # automatic checks can't see)
+        p = seg_frames(s, e, count, bad | set(seg[3] if len(seg) > 3 else []))
         picks += p
         names += [name] * len(p)
     out = np.zeros((SRC, SRC * len(picks), 4), np.uint8)

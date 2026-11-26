@@ -98,84 +98,97 @@
       "raw": "raw/attack_side.png",
       "segments": {
         "attack1": [
-          6,
-          34,
-          12
+          9,
+          28,
+          11,
+          [
+            24,
+            25,
+            26,
+            27
+          ]
         ],
         "attack2": [
-          35,
-          47,
-          9
+          29,
+          40,
+          8
         ],
         "attack3": [
-          48,
-          72,
-          14
+          44,
+          64,
+          13
         ],
         "attack_rec": [
           8,
           0,
-          7
+          6
         ]
       },
-      "spins": {
-        "attack1": -1,
-        "attack2": -1,
-        "attack3": 1
-      }
+      "spins": {}
     },
     "down": {
       "raw": "raw/attack_down.png",
       "segments": {
         "attack1": [
-          15,
-          35,
-          13
+          16,
+          31,
+          12
         ],
         "attack2": [
-          36,
-          47,
-          9
+          32,
+          49,
+          11,
+          [
+            41,
+            42
+          ]
         ],
         "attack3": [
-          48,
-          71,
-          14
+          50,
+          62,
+          10,
+          [
+            51,
+            61
+          ]
         ],
         "attack_rec": [
-          16,
-          10,
-          6
+          70,
+          84,
+          6,
+          [
+            79,
+            80,
+            81
+          ]
         ]
       },
       "spins": {
-        "attack1": -1,
-        "attack2": 1,
-        "attack3": -1
+        "attack2": -1
       }
     },
     "up": {
       "raw": "raw/attack_up.png",
       "segments": {
         "attack1": [
-          4,
-          33,
-          13
+          12,
+          31,
+          12
         ],
         "attack2": [
-          34,
+          32,
           46,
           9
         ],
         "attack3": [
           47,
-          66,
+          78,
           14
         ],
         "attack_rec": [
-          8,
+          14,
           0,
-          7
+          6
         ]
       },
       "spins": {}
@@ -192,5 +205,5 @@
     "attack2": 0.5,
     "attack3": 0.75
   },
-  "attack_notes": "Sprixen premium attack take (25 Nov), Arthur swinging a solid lime-green stand-in sword. weapon_track.py erases it and records where it was; the game draws the equipped weapon there. segments: [first raw frame, last raw frame, frames to pick] (last < first plays backwards: the recovery sheathes back to the stance)."
+  "attack_notes": "Sprixen premium ONE-HANDED attack take (26 Nov; the right hand holds the sword, the left hand stays free for a future off-hand weapon), Arthur swinging a solid lime/olive stand-in sword. weapon_track.py erases it and records where it was; the game draws the equipped weapon there. segments: [first raw frame, last raw frame, frames to pick, optional raw frames to skip] (last < first plays backwards). The two-handed take of 25 Nov is in git history (commit a8a70ab)."
 }

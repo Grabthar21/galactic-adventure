@@ -18,24 +18,24 @@
   "fps": 12
  },
  "attack1_side": {
-  "frames": 12,
+  "frames": 11,
   "cell_w": 240,
-  "fps": 33.33
+  "fps": 30.56
  },
  "attack2_side": {
-  "frames": 9,
+  "frames": 8,
   "cell_w": 240,
-  "fps": 34.62
+  "fps": 30.77
  },
  "attack3_side": {
-  "frames": 14,
+  "frames": 13,
   "cell_w": 240,
-  "fps": 33.33
+  "fps": 30.95
  },
  "attack_rec_side": {
-  "frames": 7,
+  "frames": 6,
   "cell_w": 240,
-  "fps": 31.82
+  "fps": 27.27
  },
  "walk_down": {
   "frames": 30,
@@ -56,19 +56,19 @@
   "fps": 12
  },
  "attack1_down": {
-  "frames": 13,
-  "cell_w": 240,
-  "fps": 36.11
- },
- "attack2_down": {
-  "frames": 9,
-  "cell_w": 240,
-  "fps": 34.62
- },
- "attack3_down": {
-  "frames": 14,
+  "frames": 12,
   "cell_w": 240,
   "fps": 33.33
+ },
+ "attack2_down": {
+  "frames": 11,
+  "cell_w": 240,
+  "fps": 42.31
+ },
+ "attack3_down": {
+  "frames": 10,
+  "cell_w": 240,
+  "fps": 23.81
  },
  "attack_rec_down": {
   "frames": 6,
@@ -94,9 +94,9 @@
   "fps": 12
  },
  "attack1_up": {
-  "frames": 13,
+  "frames": 12,
   "cell_w": 240,
-  "fps": 36.11
+  "fps": 33.33
  },
  "attack2_up": {
   "frames": 9,
@@ -109,9 +109,9 @@
   "fps": 33.33
  },
  "attack_rec_up": {
-  "frames": 7,
+  "frames": 6,
   "cell_w": 240,
-  "fps": 31.82
+  "fps": 27.27
  },
  "skin_ref": [
   0.9059,
