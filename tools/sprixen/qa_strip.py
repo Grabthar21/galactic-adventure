@@ -1,0 +1,214 @@
+"""Frame-by-frame quality check for an in-game animation strip (98x148 cells).
+
+Checks every frame for:
+  halo     edge pixels much lighter than the colour just inside them (white fringe)
+  haze     cool / greenish light pixels (background-removal leftovers)
+  holes    see-through pockets fully enclosed by the character
+  islands  stray specks not connected to the body
+  ground   feet not touching the cell's bottom row (floating / sinking)
+  size     character height vs the target and vs the other frames
+  drift    side-to-side wobble of the body centre
+  head     head region changing shape between frames (face lock check)
+  pops     a frame-to-frame change much larger than the rest (jumps), incl. the loop seam
+and writes a 3x contact sheet on magenta + green for a visual pass.
+
+usage: python3 qa_strip.py <strip.png> <name> [target_height=133] [walk|idle]
+exit code 1 if any check fails.
+"""
+import sys
+import numpy as np
+from PIL import Image, ImageDraw
+from scipy import ndimage
+
+from cells import CELL_W, CELL_H, FOOT_Y, K
+
+
+def frames_of(path):
+    im = np.array(Image.open(path).convert("RGBA")).astype(np.int32)
+    n = im.shape[1] // CELL_W
+    return [im[:, i * CELL_W:(i + 1) * CELL_W] for i in range(n)]
+
+
+def main():
+    path, name = sys.argv[1], sys.argv[2]
+    target = float(sys.argv[3]) if len(sys.argv) > 3 else 133.0
+    kind = sys.argv[4] if len(sys.argv) > 4 else "walk"
+    fr = frames_of(path)
+    n = len(fr)
+    fails, notes = [], []
+    heights, centres, bottoms, heads, masks = [], [], [], [], []
+    bots, frames_rgba = [], fr
+    for i, f in enumerate(fr):
+        a = f[:, :, 3]
+        m = a > 0
+        solid = a >= 128
+        ys, xs = np.where(m)
+        top, bot = ys.min(), ys.max()
+        heights.append(bot - top)
+        bottoms.append(bot)
+        t0, t1 = top + int(0.40 * (bot - top)), top + int(0.55 * (bot - top))   # torso band
+        centres.append(np.where(m[t0:t1])[1].mean())
+        masks.append(solid)
+        # head silhouette: top 28% of the body, aligned on its own top row
+        hh = int(0.28 * (bot - top))
+        head = np.zeros((hh, CELL_W), bool)
+        head[:] = solid[top:top + hh]
+        heads.append(head)
+
+        rgb = f[:, :, :3]
+        lum = rgb.mean(2)
+        # halo: outer edge pixels that are much lighter than the solid pixel 2px inside
+        outside = ~m
+        edge = m & ndimage.binary_dilation(outside)
+        inner = solid & ~ndimage.binary_dilation(outside, iterations=2)
+        if inner.any():
+            _, (iy, ix) = ndimage.distance_transform_edt(~inner, return_indices=True)
+            halo = edge & (lum - lum[iy, ix] > 45) & (lum > 170)
+            h = int(halo.sum())
+            if h > 6 * K:
+                fails.append(f"frame {i}: {h} white-fringe edge pixels")
+            elif h:
+                notes.append(f"frame {i}: {h} light edge px (ok)")
+        haze = m & ndimage.binary_dilation(outside, iterations=3) & (rgb.min(2) > 140) & (rgb[:, :, 0] < np.maximum(rgb[:, :, 1], rgb[:, :, 2]) - 6)
+        if haze.sum() > 3 * K * K:
+            fails.append(f"frame {i}: {int(haze.sum())} cool/greenish haze px")
+        holes, nh = ndimage.label(ndimage.binary_fill_holes(solid) & ~solid)
+        for k in range(1, nh + 1):
+            sz = int((holes == k).sum())
+            hy, hx = np.where(holes == k)
+            if sz <= 12 * K * K:   # same limit as resample.fill_pinholes; bigger = real arm/leg gap
+                fails.append(f"frame {i}: pinhole {sz}px at ({int(hx.mean())},{int(hy.mean())})")
+            elif hy.mean() < top + 0.45 * (bot - top) and sz < 40 * K * K and kind != "roll":
+                # (a roll turns over: the top of the frame can be the legs; holes we made in a
+                # roll are caught by qa_shape.py's check against Sprixen's own frames)
+                fails.append(f"frame {i}: see-through hole {sz}px in head/chest at ({int(hx.mean())},{int(hy.mean())})")
+            else:
+                notes.append(f"frame {i}: {sz}px gap at ({int(hx.mean())},{int(hy.mean())}) - arm/leg gap, ok")
+        lab, nl = ndimage.label(m, structure=np.ones((3, 3)))
+        if nl > 1:
+            sizes = ndimage.sum(m, lab, range(1, nl + 1))
+            main = sizes.max()
+            specks = [int(s) for s in sizes if s < main]
+            if specks:
+                fails.append(f"frame {i}: {len(specks)} stray speck(s), largest {max(specks)}px")
+        if kind in ("run", "roll", "attack"):
+            bots.append(bot)          # a run leaves the ground; checked for the whole strip below
+        elif bot != FOOT_Y:
+            fails.append(f"frame {i}: feet at row {bot}, not on the ground row {FOOT_Y}")
+
+    for i, f in enumerate(fr):
+        a_ = f[:, :, 3] > 0
+        if a_[0].any() or a_[:, 0].any() or a_[:, -1].any():
+            fails.append(f"frame {i}: drawing touches the cell edge (cut off)")
+    H = np.array(heights, float)
+    C = np.array(centres)
+    med_h = float(np.median(H))
+    # (absolute size is checked across animations by qa_cross.py: a wide stance is
+    #  legitimately shorter than the standing drawing, so height alone isn't a size test)
+    if kind == "idle" and H.max() - H.min() > 3 * K:
+        fails.append(f"idle height varies {H.min():.0f}-{H.max():.0f}px")
+    if kind == "run" and H.max() - H.min() > 18 * K:
+        fails.append(f"run height varies {H.min():.0f}-{H.max():.0f}px")
+    if kind == "walk" and H.max() - H.min() > 8 * K:
+        fails.append(f"walk height varies {H.min():.0f}-{H.max():.0f}px")
+    if kind == "roll":
+        # a roll tumbles: no height or head rules. It must start and end standing on the ground,
+        # never sink below it, and the body must travel smoothly (no frame-to-frame jumps)
+        if max(bots) > FOOT_Y:
+            fails.append(f"roll goes below the ground row ({max(bots)} > {FOOT_Y})")
+        for i in (0, n - 1):
+            if bots[i] < FOOT_Y - 2:
+                fails.append(f"roll frame {i} (take-off/landing) not on the ground (row {bots[i]})")
+        cy, cx = [], []
+        for f in frames_rgba:
+            yy, xx = np.nonzero(f[..., 3] >= 128)
+            cy.append(yy.mean()); cx.append(xx.mean())
+        step = np.hypot(np.diff(cx), np.diff(cy))
+        if step.max() > 14 * K:
+            fails.append(f"roll jumps {step.max():.0f}px between frames {int(step.argmax())}->{int(step.argmax()) + 1}")
+        print(f"   roll: centre path max step {step.max():.1f}px, feet {min(bots)}-{max(bots)}")
+    if kind == "attack":
+        # sword slashes: he stays on his feet (a lunge may lift the back heel a little); fast
+        # swings change the silhouette a lot from frame to frame, so no pop / centre-jump rules
+        if max(bots) > FOOT_Y:
+            fails.append(f"attack: feet below the ground row ({max(bots)} > {FOOT_Y})")
+        if min(bots) < FOOT_Y - 6 * K:
+            fails.append(f"attack: feet leave the ground ({FOOT_Y - min(bots)}px)")
+        print(f"   attack: feet rows {min(bots)}-{max(bots)}")
+    if kind == "run":
+        # feet: never below the ground; the planted frames on it; airborne frames lifted a little
+        if max(bots) > FOOT_Y:
+            fails.append(f"feet below the ground row in a frame ({max(bots)} > {FOOT_Y})")
+        if max(bots) < FOOT_Y - 2:
+            fails.append(f"no frame has its feet on the ground (lowest row {max(bots)})")
+        if FOOT_Y - min(bots) > 16 * K:
+            fails.append(f"airborne frame lifted {FOOT_Y - min(bots)}px (more than {16 * K:.0f})")
+        # a run's silhouette centre swings with the legs; steadiness is judged on the head:
+        # its x and the top of the solid head block must move smoothly frame to frame
+        hx, hy = [], []
+        for f in frames_rgba:
+            sol = f[..., 3] >= 128
+            rows = np.where(sol.sum(1) >= 8)[0]
+            t = rows.min()
+            hy.append(t)
+            hx.append(np.where(sol[t:t + int(25 * K)])[1].mean())
+        hx, hy = np.array(hx), np.array(hy, float)
+        jx = np.abs(np.diff(np.r_[hx, hx[0]]))
+        jy = np.abs(np.diff(np.r_[hy, hy[0]]))
+        if jx.max() > 2.5 * K:
+            fails.append(f"head jumps sideways {jx.max():.1f}px between frames {int(jx.argmax())}->{(int(jx.argmax()) + 1) % n}")
+        # a jump is a step much bigger than the steps either side of it (the bounce itself is smooth)
+        for i in range(n):
+            nb = max(jy[i - 1], jy[(i + 1) % n])
+            if jy[i] > 5 * K and jy[i] > 2.2 * nb:
+                fails.append(f"head pops {jy[i]:.0f}px up/down between frames {i}->{(i + 1) % n}")
+        print(f"   head x {hx.min():.1f}-{hx.max():.1f} (max step {jx.max():.1f}), head top {hy.min():.0f}-{hy.max():.0f} (max step {jy.max():.0f}), feet {min(bots)}-{max(bots)}")
+    jumps = np.abs(np.diff(np.r_[C, C[0]]))
+    if kind not in ("run", "roll", "attack") and jumps.max() > 2.5 * K:
+        fails.append(f"body centre jumps {jumps.max():.1f}px between frames {int(jumps.argmax())}->{(int(jumps.argmax()) + 1) % n}")
+    # head shape stability (IoU vs median frame)
+    ref = heads[n // 2]
+    import os
+    for i, h in enumerate(heads if os.environ.get("HEAD_LOCK", "1") != "0" else []):   # Sprixen-head mode: the head turns
+        k = min(len(h), len(ref))
+        inter = (h[:k] & ref[:k]).sum(); uni = (h[:k] | ref[:k]).sum()
+        iou = inter / max(uni, 1)
+        if iou < 0.80:
+            fails.append(f"frame {i}: head shape differs (IoU {iou:.2f})")
+    # pops: silhouette change between consecutive frames, including the loop seam
+    d = np.array([(masks[i] ^ masks[(i + 1) % n]).sum() for i in range(n)], float)
+    med = np.median(d)
+    for i, v in enumerate(d if kind != "attack" else []):
+        if v > max(2.6 * med, med + 120 * K * K):
+            fails.append(f"pop: frame {i}->{(i + 1) % n} changes {int(v)}px (typical {int(med)})")
+
+    print(f"== {name}: {n} frames, height {H.min():.0f}-{H.max():.0f} (median {med_h:.0f}, target {target:.0f}), "
+          f"centre range {C.min():.1f}-{C.max():.1f}, max centre step {jumps.max():.1f}, "
+          f"silhouette change median {med:.0f}px max {d.max():.0f}px")
+    for x in notes[:6]:
+        print("   note:", x)
+    for x in fails:
+        print("   FAIL:", x)
+    print("   RESULT:", "PASS" if not fails else f"{len(fails)} issue(s)")
+
+    # contact sheet
+    cols = min(n, 10)
+    rows = (n + cols - 1) // cols
+    S = 3
+    sheet = Image.new("RGBA", (cols * CELL_W * S, rows * CELL_H * S * 2), (0, 0, 0, 255))
+    strip = Image.open(path).convert("RGBA")
+    for bi, bg in enumerate([(200, 0, 200, 255), (110, 165, 85, 255)]):
+        for i in range(n):
+            cell = strip.crop((i * CELL_W, 0, (i + 1) * CELL_W, CELL_H)).resize((CELL_W * S, CELL_H * S), Image.NEAREST)
+            tile = Image.new("RGBA", cell.size, bg)
+            tile.alpha_composite(cell)
+            ImageDraw.Draw(tile).text((4, 4), str(i), fill=(255, 255, 255, 255))
+            sheet.paste(tile, ((i % cols) * CELL_W * S, (bi * rows + i // cols) * CELL_H * S))
+    out = f"/tmp/qa_{name}.png"
+    sheet.save(out)
+    print("   contact sheet:", out)
+    sys.exit(1 if fails else 0)
+
+
+if __name__ == "__main__":
+    main()

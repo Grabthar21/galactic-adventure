@@ -1,0 +1,132 @@
+{
+ "walk_side": {
+  "frames": 29,
+  "fps": 36.25
+ },
+ "run_side": {
+  "frames": 18,
+  "fps": 32.73,
+  "cell_w": 240
+ },
+ "roll_side": {
+  "frames": 18,
+  "fps": 50.0,
+  "cell_w": 240
+ },
+ "idle_side": {
+  "frames": 32,
+  "fps": 12
+ },
+ "attack1_side": {
+  "frames": 11,
+  "cell_w": 240,
+  "fps": 30.56
+ },
+ "attack2_side": {
+  "frames": 8,
+  "cell_w": 240,
+  "fps": 30.77
+ },
+ "attack3_side": {
+  "frames": 13,
+  "cell_w": 240,
+  "fps": 30.95
+ },
+ "attack_rec_side": {
+  "frames": 6,
+  "cell_w": 240,
+  "fps": 27.27
+ },
+ "walk_down": {
+  "frames": 30,
+  "fps": 37.5
+ },
+ "run_down": {
+  "frames": 26,
+  "fps": 47.27,
+  "cell_w": 240
+ },
+ "roll_down": {
+  "frames": 18,
+  "fps": 50.0,
+  "cell_w": 240
+ },
+ "idle_down": {
+  "frames": 32,
+  "fps": 12
+ },
+ "attack1_down": {
+  "frames": 12,
+  "cell_w": 240,
+  "fps": 33.33
+ },
+ "attack2_down": {
+  "frames": 11,
+  "cell_w": 240,
+  "fps": 42.31
+ },
+ "attack3_down": {
+  "frames": 10,
+  "cell_w": 240,
+  "fps": 23.81
+ },
+ "attack_rec_down": {
+  "frames": 6,
+  "cell_w": 240,
+  "fps": 27.27
+ },
+ "walk_up": {
+  "frames": 24,
+  "fps": 30.0
+ },
+ "run_up": {
+  "frames": 23,
+  "fps": 41.82,
+  "cell_w": 240
+ },
+ "roll_up": {
+  "frames": 18,
+  "fps": 50.0,
+  "cell_w": 240
+ },
+ "idle_up": {
+  "frames": 32,
+  "fps": 12
+ },
+ "attack1_up": {
+  "frames": 12,
+  "cell_w": 240,
+  "fps": 33.33
+ },
+ "attack2_up": {
+  "frames": 9,
+  "cell_w": 240,
+  "fps": 34.62
+ },
+ "attack3_up": {
+  "frames": 14,
+  "cell_w": 240,
+  "fps": 33.33
+ },
+ "attack_rec_up": {
+  "frames": 6,
+  "cell_w": 240,
+  "fps": 27.27
+ },
+ "skin_ref": [
+  0.9059,
+  0.7059,
+  0.549
+ ],
+ "hair_ref": [
+  0.4627,
+  0.2863,
+  0.1843
+ ],
+ "cell": [
+  147,
+  222
+ ],
+ "draw_scale": 0.5,
+ "smooth": true
+}

@@ -17,6 +17,7 @@ var world: Node2D
 var actors: Node2D
 var player: CharacterBody2D
 var cam: Camera2D
+const CAMERA_ZOOM := 1.1        # 10% closer than 1:1 (user request 2026-11-11)
 var ui: CanvasLayer
 var tint: CanvasModulate
 
@@ -50,10 +51,14 @@ func _ready() -> void:
 	tint.color = Color(1.0, 0.95, 0.88)   # late afternoon
 	add_child(tint)
 
+	for b in world.make_building_sprites():
+		actors.add_child(b)
+
 	player = Player.new()
 	player.position = Vector2(820, 760)
 	actors.add_child(player)
 	cam = Camera2D.new()
+	cam.zoom = Vector2(CAMERA_ZOOM, CAMERA_ZOOM)
 	cam.position_smoothing_enabled = true
 	cam.position_smoothing_speed = 7.0
 	cam.offset = Vector2(0, -50)
@@ -90,7 +95,7 @@ func _set_area(area: String) -> void:
 	var r: Rect2 = World.ROOM if in_room else World.FARM
 	cam.limit_left = int(r.position.x) - (240 if in_room else 0)
 	cam.limit_right = int(r.end.x) + (240 if in_room else 0)
-	cam.limit_top = int(r.position.y) - (60 if in_room else 0)
+	cam.limit_top = int(r.position.y) - (60 if in_room else 110)
 	cam.limit_bottom = int(r.end.y) + (60 if in_room else 0)
 
 
@@ -199,7 +204,7 @@ func _swine_close() -> void:
 func _take_rod() -> void:
 	remove_interact("rod")
 	rod.visible = false
-	player.weapon = "rod"
+	player.equip("metal_rod")
 	ui.toast("Got: Metal Rod")
 	ui.toast("Attack: J / Left-click / (X). Press repeatedly for a 3-hit combo.", Color(0.8, 0.95, 1))
 	ui.set_objective("Drive the wolves away from the pen")
@@ -409,7 +414,7 @@ func _farewell() -> void:
 	await ui.say("", "You tell your parents everything: the crash, the bronze stranger, the key, and the Sanderians.")
 	await ui.say(FATHER, "It seems you have a great destiny placed upon you. What you make of it will be your own choice. Choose well, and know that we love you.")
 	await ui.say(FATHER, "Do not forget who you are and who you can become. Take this as a reminder of that, and use it only in dire need.")
-	player.weapon = "sword"
+	player.equip("fathers_sword")
 	ui.toast("Received: Father's Sword (stronger than the rod)", Color(1, 0.9, 0.5))
 	await ui.say(MOTHER, "If time is truly that short, you cannot afford to linger. Learn all you can of this plot, and stop it before it comes to pass. Go with my love, and with my blessing.")
 	shake(0.8)

@@ -1,0 +1,123 @@
+"""Turn the Sprixen walk sheet (16 x 256px frames) into art/<hero>_side_walk.png.
+
+Sprixen's in-place walk wobbles: a couple of frames sit ~19px off-centre and the
+height jumps by up to 10px between neighbours. Each frame is therefore
+  1. shifted so the torso centre is fixed (no side-to-side jitter),
+  2. uniformly rescaled about the feet so its height follows a smoothed
+     (circular 3-tap average) curve, keeping the bob but losing the pops,
+then scaled to in-game height into 98x148 cells, feet on the bottom row.
+It also prints the ground speed (px/s at the game's sprite scale) that keeps the
+planted foot from sliding.
+
+usage: python3 build_walk_strip.py <sheet.png> <out.png> [target_height=133] [fps=20] [frame list e.g. 0,1,2]
+"""
+import sys
+import numpy as np
+from PIL import Image
+from resample import downscale, defringe, snap_feet, fill_pinholes, remove_specks, restore_outline
+
+SRC = 256
+from cells import CELL_W, CELL_H, FOOT_Y, CENTER_X, K, REINK
+GAME_SCALE = 0.75   # player.gd SCALE
+
+
+def alpha(f):
+    return np.array(f)[:, :, 3] > 40
+
+
+def main():
+    sheet = Image.open(sys.argv[1]).convert("RGBA")
+    out = sys.argv[2]
+    target_h = (float(sys.argv[3]) if len(sys.argv) > 3 else 133.0) * K
+    fps = float(sys.argv[4]) if len(sys.argv) > 4 else 20.0
+    n_all = sheet.width // SRC
+    order = [int(x) for x in sys.argv[5].split(",")] if len(sys.argv) > 5 else list(range(n_all))
+    frames = [sheet.crop((i * SRC, 0, (i + 1) * SRC, SRC)) for i in order]
+    import os
+    pf = os.environ.get("PLACE_FROM")      # same geometry, measured before a colour-only fix
+    psheet = Image.open(pf).convert("RGBA") if pf else sheet
+    pframes = [psheet.crop((i * SRC, 0, (i + 1) * SRC, SRC)) for i in order]
+    info = []
+    for f in pframes:
+        a = alpha(f)
+        ys, xs = np.where(a)
+        top, bot = ys.min(), ys.max()
+        tys, txs = np.where(a[top + 75:top + 105])
+        info.append(dict(top=top, bot=bot, h=bot - top, torso=txs.mean()))
+    hs = np.array([d["h"] for d in info], float)
+    n = len(frames)
+    smooth = np.array([(hs[i - 1] + hs[i] + hs[(i + 1) % n]) / 3 for i in range(n)])
+    # one scale for the whole strip, from the approved standing drawing's height (env BASE_H),
+    # so a striding frame is drawn at exactly the same size as the standing idle
+    import os
+    base_h = float(os.environ.get("BASE_H", np.median(hs)))
+    base = target_h / base_h
+    strip = Image.new("RGBA", (CELL_W * n, CELL_H), (0, 0, 0, 0))
+    foot_x = []   # x of the lowest (planted) foot, in game cell px, per frame
+    # PLACE_FIXED (runs): keep Sprixen's own locked camera -- one offset for every frame, so the
+    # body's lean and the bounce (feet leaving the ground) stay as drawn. Re-centring each frame
+    # on its torso band swings the head ~6 game px in a run (the arms cross that band), and
+    # snapping every frame's lowest pixel to the ground jerks the airborne frames down.
+    fixed = os.environ.get("PLACE_FIXED") == "1"
+    if fixed:
+        fx_torso = float(np.nanmedian([d["torso"] for d in info]))   # a tucked roll frame can be shorter than the torso band
+        fx_bot = max(d["bot"] for d in info)
+    # FRAME_SCALES (rolls): a size correction per frame, from roll_scale.py's measurements, so
+    # every frame is drawn at the same body size. A frame is resized about its centre of mass,
+    # or about its feet when it stands on the ground.
+    fsc = [float(v) for v in os.environ["FRAME_SCALES"].split(",")] if os.environ.get("FRAME_SCALES") else None
+    for i, (f, d) in enumerate(zip(frames, info)):
+        s0 = base
+        s = base * (fsc[i] if fsc else 1.0)
+        w2, h2 = round(SRC * s), round(SRC * s)
+        big = downscale(f, w2, h2)
+        # place: torso centre -> CENTER_X, feet bottom -> FOOT_Y (worked out at the strip's scale s0)
+        px = round(i * CELL_W + CENTER_X - (fx_torso if fixed else d["torso"]) * s0)
+        py = round(FOOT_Y - (fx_bot if fixed else d["bot"]) * s0)
+        if fixed and os.environ.get("ONESHOT") == "1" and len(info) > 1:
+            # a one-shot move (roll) starts and ends standing: the ground line follows Sprixen's
+            # camera drift from the first frame's feet to the last frame's, so both are on the
+            # ground; no frame goes below it
+            t_ = i / (len(info) - 1)
+            gy = (1 - t_) * info[0]["bot"] + t_ * info[-1]["bot"]
+            py = round(FOOT_Y - gy * s0)
+            py = min(py, round(FOOT_Y - d["bot"] * s0))
+        if s != s0:
+            # size correction: the anchor (centre of mass, or the feet when this frame is on the
+            # ground) stays exactly where the uncorrected frame had it
+            a_ = alpha(pframes[i]); yy_, xx_ = np.nonzero(a_)
+            ax, ay = xx_.mean(), yy_.mean()
+            if py + d["bot"] * s0 >= FOOT_Y - 2:
+                ay = d["bot"]
+            px = round(px + ax * (s0 - s))
+            py = round(py + ay * (s0 - s))
+        if fixed:
+            py = max(py, 3 - round(d["top"] * s))   # the hair of the highest frames stays inside the cell
+        cell = Image.new("RGBA", (CELL_W * n, CELL_H), (0, 0, 0, 0))
+        cell.alpha_composite(big, (max(px, 0), max(py, 0)),
+                             (max(-px, 0), max(-py, 0)))
+        # clip to own cell
+        mask = Image.new("L", cell.size, 0)
+        mask.paste(255, (i * CELL_W, 0, (i + 1) * CELL_W, CELL_H))
+        clipped = Image.new("RGBA", cell.size, (0, 0, 0, 0))
+        clipped.paste(cell, (0, 0), mask)
+        strip.alpha_composite(clipped)
+        a = alpha(pframes[i])
+        ys, xs = np.where(a)
+        low = xs[ys > d["bot"] - 4]
+        foot_x.append((low.min() - d["torso"]) * s)   # toe-side unused; heel edge
+    strip = remove_specks(fill_pinholes(defringe(strip)))
+    strip = fill_pinholes(restore_outline(strip) if REINK else strip)
+    if not fixed:
+        strip = snap_feet(strip)
+    strip.save(out)
+    # planted-foot slide per frame (backwards = positive speed)
+    dx = [foot_x[i] - foot_x[(i + 1) % n] for i in range(n)]
+    good = [v for v in dx if 0 < v < 15]
+    v = float(np.median(good)) * fps * GAME_SCALE if good else 0
+    print(f"{n} frames {order} -> {out}; median height {np.median(hs):.0f}px; "
+          f"foot slide/frame {np.round(dx,1).tolist()}; suggested speed {v:.0f} px/s at {fps:.0f} fps")
+
+
+if __name__ == "__main__":
+    main()

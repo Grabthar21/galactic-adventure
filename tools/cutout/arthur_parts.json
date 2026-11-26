@@ -1,0 +1,145 @@
+{
+ "name": "arthur_cut",
+ "sheet": "right_alpha.png",
+ "reference": "ref_walk_tracking.json",
+ "files": {
+  "torso": "torso_built.png",
+  "thigh_near": "thigh_side.png",
+  "thigh_far": "thigh_side.png",
+  "boot_near": "lower_near.png",
+  "boot_far": "lower_far.png"
+ },
+ "boxes": {
+  "head": [
+   40,
+   3,
+   267,
+   227
+  ],
+  "uarm_near": [
+   21,
+   458,
+   129,
+   657
+  ],
+  "hand_near": [
+   127,
+   546,
+   226,
+   718
+  ],
+  "uarm_far": [
+   226,
+   458,
+   331,
+   655
+  ],
+  "hand_far": [
+   346,
+   542,
+   435,
+   719
+  ]
+ },
+ "head_joints": {
+  "neck": [
+   122,
+   205
+  ]
+ },
+ "torso_joints": {
+  "neck": [
+   112,
+   16
+  ],
+  "shoulder_near": [
+   80,
+   58
+  ],
+  "shoulder_far": [
+   100,
+   56
+  ],
+  "hip_near": [
+   128,
+   214
+  ],
+  "hip_far": [
+   114,
+   214
+  ],
+  "canvas": [
+   320,
+   760
+  ]
+ },
+ "head_under_collar": true,
+ "hair": {
+  "brow_y": 112,
+  "top_band": 70,
+  "back_x": 100,
+  "back_band": 50,
+  "back_bottom": 200,
+  "protect": [
+   [
+    152,
+    160,
+    62,
+    58
+   ],
+   [
+    116,
+    158,
+    18,
+    26
+   ]
+  ],
+  "lag": 0.07,
+  "gain": 0.55,
+  "max_px": 14,
+  "drag": 0.3,
+  "trail_px": 2.0,
+  "freq": 3.5,
+  "damping": 0.4
+ },
+ "hide_far_upper_arm": true,
+ "joints": {
+  "boot_near.knee": [
+   98.5,
+   14.0
+  ],
+  "boot_near.ankle": [
+   87.0,
+   220.0
+  ],
+  "boot_near.heel": [
+   42.0,
+   271.0
+  ],
+  "boot_near.toe": [
+   169.0,
+   271.0
+  ],
+  "boot_far.knee": [
+   101.5,
+   14.0
+  ],
+  "boot_far.ankle": [
+   90.5,
+   233.0
+  ],
+  "boot_far.heel": [
+   43.0,
+   284.0
+  ],
+  "boot_far.toe": [
+   177.0,
+   284.0
+  ]
+ },
+ "thigh_over_shin": true,
+ "motion": {
+  "far_back_scale": 0.25
+ },
+ "clip_far_arm_behind_back": 200
+}

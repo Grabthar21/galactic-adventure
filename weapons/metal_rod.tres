@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="MeleeWeapon" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/melee_weapon.gd" id="1"]
+[ext_resource type="Texture2D" path="res://art/weapons/metal_rod.png" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = "metal_rod"
+display_name = "Metal Rod"
+texture = ExtResource("2")
+grip_px = Vector2(12, 158)
+tip_px = Vector2(12, 3)
+length_scale = 0.9
+moveset = "sword"
+damage = Array[int]([1, 1, 2])
+reach = Array[float]([90.0, 90.0, 108.0])
+arc_half_deg = Array[float]([75.0, 75.0, 90.0])
+knockback = Array[float]([240.0, 240.0, 480.0])
+speed = 1.0
+trail_color = Color(1.0, 1.0, 1.0, 0.45)
+trail_width = 6.0
