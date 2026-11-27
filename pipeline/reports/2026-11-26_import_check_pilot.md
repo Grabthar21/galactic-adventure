@@ -82,3 +82,17 @@ The recessed strip between the lips (up to ~6.6 mm deep) was brought forward to 
 surface, moving points only toward the front so no faces turn inside-out. Two earlier tries
 (smoothing the area) tore holes because Tripo splits the face into separate pieces along the
 lip line; points at the same spot are now moved together. Comparison: `img/arthur_mouth_closed.png`.
+
+## Mouth, second pass — the real cause
+The "tongue" the user saw was not texture. Tripo's GLB carries **custom normals** that still
+described the open grin, so even after the lip geometry was moved, the lighting drew the old
+mouth. Fix: flatten the mouth area into a smooth surface (fitted to the skin around it),
+clear the custom normals, and merge the duplicate points Tripo leaves along its texture seams
+(27,597 -> 23,948 points, triangles unchanged at 39,329) so shading stays smooth. Then paint a
+thin smile line. Comparison: `img/arthur_mouth_v8.png`.
+Backup before this step: `Arthur_clean_before_mouthbake.blend`.
+
+Pipeline rules learned:
+- Clear imported custom normals before any shape change, and merge seam duplicates first.
+- Check faces against the source after every geometry step.
+- Preview with real lighting (Eevee, backface culling on), not the flat Workbench view.
