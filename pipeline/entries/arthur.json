@@ -36,7 +36,8 @@
     },
     "log": [
       "2026-11-26: first import check. Over budget 4.8x, 1 LOD, own skeleton (needs rig to Manny). Must-have parts need visual confirmation.",
-      "2026-11-26: Blender check of Tripo source. Clean surface (no flipped or non-manifold), but 191k triangles, 98 cm tall (needs x1.63 to 160 cm), 16 debris pieces, 4K textures, no rig."
+      "2026-11-26: Blender check of Tripo source. Clean surface (no flipped or non-manifold), but 191k triangles, 98 cm tall (needs x1.63 to 160 cm), 16 debris pieces, 4K textures, no rig.",
+      "2026-11-26: cleanup. 191,104 -> 39,329 triangles (head pass 0.35, body 0.175), 16 debris pieces removed, scaled to 160 cm, textures 4K -> 2K. Face visually unchanged. Not yet in Unreal."
     ],
     "blender_check": {
       "date": "2026-11-26",
@@ -50,6 +51,14 @@
       "materials": 1,
       "textures": "3 x 4096 (colour, normal, roughness/metal)",
       "armature": null
+    },
+    "cleanup": {
+      "date": "2026-11-26",
+      "triangles": 39329,
+      "head_triangles": 12020,
+      "textures": "3 x 2048",
+      "blend": "C:\\Users\\johnn\\Documents\\SpacePiece_Blender\\ArthurAdv\\pipeline\\Arthur_clean.blend",
+      "status": "awaiting user approval of face"
     }
   },
   "source": {

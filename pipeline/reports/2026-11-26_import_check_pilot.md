@@ -51,3 +51,13 @@ skeleton loaded, so it is broken and should be archived.
 Verdict: **fixable, no reject.** The surface is clean; everything wrong is on the auto-fix list
 or is the expected rigging step. The 4K colour and normal maps are a good source for baking
 onto the reduced mesh.
+
+## Cleanup — Arthur (`pipeline/scripts/blender_cleanup.py`)
+
+- 191,104 → **39,329 triangles** (head region kept at 35% = 12,020; body at 17.5%).
+- 16 debris pieces (56 faces) removed; scaled 98 → 160 cm; textures 4096 → 2048.
+- Face and silhouette visually unchanged against the source (`img/arthur_face_before_after.png`,
+  `img/arthur_body_after_vs_before.png`). No baking needed: the reduction kept the UVs, so the
+  original painted textures still line up.
+- Output on Henry: `Documents\SpacePiece_Blender\ArthurAdv\pipeline\` (Arthur_clean.blend,
+  T_Arthur_D/N/RM). Not imported into Unreal yet; waiting for approval (hero = ask first).
