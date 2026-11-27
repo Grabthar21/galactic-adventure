@@ -106,3 +106,14 @@ Pipeline rules learned:
   faceting and were rolled back (backups `Arthur_clean_before_*.blend`).
 - Per the standard, rebuilding a face feature is beyond auto-fix. Options put to the user:
   regenerate the head with a small closed mouth, hand-sculpt the mouth, or keep it for now.
+
+## Eyes rebuilt as their own material
+- Cause: in Tripo's texture each eye gets only ~60x60 pixels, the two eyes were painted
+  differently (one pupil smeared, highlights in different places), so pupils looked blocky and
+  mismatched up close.
+- Fix: the eye area (about 70 faces per eye) now uses a separate material `M_Arthur_Eyes` with
+  its own 1024x512 texture `T_Arthur_Eyes.png` (~0.08 mm per pixel). The skin and lids are
+  re-sampled from the original 4K texture; iris, round pupil and one shared highlight layout are
+  painted cleanly, the same on both eyes. Roughness 0.5, low specular, no glassy look.
+- Character now uses 2 materials (limit 4). Backup: `Arthur_clean_before_eyes.blend`.
+- Comparison: `img/arthur_eyes_fixed.png`.
