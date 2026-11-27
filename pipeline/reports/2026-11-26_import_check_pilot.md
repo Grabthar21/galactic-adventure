@@ -76,3 +76,9 @@ A "recalculate outside" pass during cleanup flipped 9,636 of 39,329 faces inside
 Workbench preview hid it (no backface culling); an Eevee render with culling showed holes.
 Fixed by matching each face's direction to the nearest face on the untouched source.
 Rule added: after cleanup, compare face directions against the source; any mismatch = auto-fix.
+
+## Mouth gap closed (shape key `MouthClosed`, value 1)
+The recessed strip between the lips (up to ~6.6 mm deep) was brought forward to the lip
+surface, moving points only toward the front so no faces turn inside-out. Two earlier tries
+(smoothing the area) tore holes because Tripo splits the face into separate pieces along the
+lip line; points at the same spot are now moved together. Comparison: `img/arthur_mouth_closed.png`.
