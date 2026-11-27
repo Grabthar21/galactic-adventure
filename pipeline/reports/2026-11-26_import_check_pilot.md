@@ -33,3 +33,21 @@ skeleton loaded, so it is broken and should be archived.
 - Budget edge: the lion misses by under 1%. Proposal: allow 10% over the limit as a warning, not a fix.
 - Size readings use mesh bounds, which include the bind pose, so they are rough.
 - Not covered yet (needs the Blender step): loose pieces, holes, flipped normals.
+
+## Blender check — Arthur source (`Downloads\adventurer character 3d model.glb`, Tripo, 14 Nov)
+
+| Check | Result | Status |
+|---|---|---|
+| Triangles | 191,104 (limit 40,000) | auto-fix |
+| Debris | 16 tiny pieces under 10 faces | auto-fix (delete) |
+| Pieces | 257 separate shells, largest 8,749 faces; 209 under 1,000 faces | info: reduce per piece so seams don't open |
+| Open edges | 18,438 (edges of the separate clothing/hair shells) | info |
+| Flipped normals / non-manifold / loose verts | 0 / 0 / 0 | pass |
+| Height | 98 cm (target 160) | auto-fix (scale x1.63) |
+| Materials | 1 | pass |
+| Textures | 3 at 4096px (colour, normal, roughness-metal) | auto-fix (2048 for Henry's 3 GB card) |
+| Armature | none | needs rig |
+
+Verdict: **fixable, no reject.** The surface is clean; everything wrong is on the auto-fix list
+or is the expected rigging step. The 4K colour and normal maps are a good source for baking
+onto the reduced mesh.

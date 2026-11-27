@@ -3,7 +3,7 @@
   "archetype": "biped",
   "hero": true,
   "class": "hero",
-  "height_cm": null,
+  "height_cm": 160,
   "references": [
     "Space Piece Drive folder: Arthur character sheets",
     "claude project: Arthur_Adventurer_Measurements.md"
@@ -35,7 +35,26 @@
       "size": "160 cm tall"
     },
     "log": [
-      "2026-11-26: first import check. Over budget 4.8x, 1 LOD, own skeleton (needs rig to Manny). Must-have parts need visual confirmation."
-    ]
+      "2026-11-26: first import check. Over budget 4.8x, 1 LOD, own skeleton (needs rig to Manny). Must-have parts need visual confirmation.",
+      "2026-11-26: Blender check of Tripo source. Clean surface (no flipped or non-manifold), but 191k triangles, 98 cm tall (needs x1.63 to 160 cm), 16 debris pieces, 4K textures, no rig."
+    ],
+    "blender_check": {
+      "date": "2026-11-26",
+      "triangles": 191104,
+      "pieces": 257,
+      "debris_pieces": 16,
+      "open_edges": 18438,
+      "flipped": 0,
+      "non_manifold": 0,
+      "height_cm": 98,
+      "materials": 1,
+      "textures": "3 x 4096 (colour, normal, roughness/metal)",
+      "armature": null
+    }
+  },
+  "source": {
+    "file": "C:\\Users\\johnn\\Downloads\\adventurer character 3d model.glb",
+    "generator": "Tripo",
+    "date": "2026-11-14"
   }
 }
