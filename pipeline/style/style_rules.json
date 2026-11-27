@@ -1,0 +1,145 @@
+{
+  "version": "1.0",
+  "date": "2026-11-27",
+  "doc": "Art_Style_Guide.md (claude project and pipeline/style/)",
+  "reference_character": "Arthur (pipeline/entries/arthur.json)",
+  "proportions": {
+    "_how": "Measured on the rigged model in its rest pose. head_frac = (top of mesh - head bone) / height. arm_frac = (upperarm + lowerarm bone length) / height. leg_frac = (thigh + calf bone length) / height.",
+    "human_child": {
+      "head_frac": [
+        0.14,
+        0.18
+      ],
+      "arm_frac": [
+        0.22,
+        0.3
+      ],
+      "leg_frac": [
+        0.38,
+        0.47
+      ]
+    },
+    "human_teen": {
+      "head_frac": [
+        0.13,
+        0.17
+      ],
+      "arm_frac": [
+        0.22,
+        0.3
+      ],
+      "leg_frac": [
+        0.4,
+        0.48
+      ]
+    },
+    "human_adult": {
+      "head_frac": [
+        0.11,
+        0.15
+      ],
+      "arm_frac": [
+        0.26,
+        0.34
+      ],
+      "leg_frac": [
+        0.42,
+        0.5
+      ]
+    },
+    "arthur_measured": {
+      "head_frac": 0.151,
+      "arm_frac": 0.245,
+      "leg_frac": 0.436,
+      "heads_tall_with_hair": 6.2
+    }
+  },
+  "palette": {
+    "_how": "Arthur's approved colours as they read in the standard review lighting (not raw texture values). New characters should sit in the same warm, earthy family; hero accents may be stronger.",
+    "arthur": {
+      "vest_dark_leather": "#473027",
+      "trousers_grey_brown": "#583d32",
+      "boots_hair_brown": "#84523c",
+      "leather_light": "#a76e4f",
+      "skin": "#b98a70",
+      "shirt_cream": "#c2a28e",
+      "deepest_shadow": "#32221b"
+    }
+  },
+  "base_colour_texture": {
+    "_how": "Checked on the base-colour texture, with pixels outside UV islands (alpha 0 or pure flat fill) ignored.",
+    "near_black_value": 0.06,
+    "max_near_black_frac": 0.03,
+    "near_white_value": 0.96,
+    "max_near_white_frac": 0.02,
+    "saturation_mean": [
+      0.18,
+      0.62
+    ],
+    "max_neon_frac": 0.01,
+    "neon": {
+      "saturation": 0.85,
+      "value": 0.85
+    },
+    "max_detail_noise": 0.055,
+    "_detail_noise": "Mean absolute difference between the texture and a 3-pixel blur of itself (0-1). Photo-like or speckled textures score high; painted textures score low. Provisional: calibrate on Arthur's T_Arthur_D_v2 when Henry is back.",
+    "max_size": 2048
+  },
+  "material": {
+    "roughness": 0.85,
+    "roughness_min": 0.7,
+    "specular": 0.25,
+    "metallic": 0.0,
+    "metal_parts_allowed": [
+      "armor",
+      "armour",
+      "blade",
+      "buckle",
+      "coin",
+      "metal",
+      "rivet",
+      "sword"
+    ],
+    "metal_roughness_min": 0.35
+  },
+  "face": {
+    "hero_needs_eye_material": true,
+    "eye_texture_min": 512,
+    "checklist": [
+      "Mouth closed or small; no teeth or inner mouth showing through the lips",
+      "Eye shine is one small painted highlight per eye, same side on both eyes, no glossy 'wet' reflection",
+      "Eye whites clean: no skin or brown colour bleeding into them",
+      "Both eyes the same size and height (within 5%)",
+      "Brows readable from the gameplay camera"
+    ]
+  },
+  "review": {
+    "turnaround": [
+      "front",
+      "three_quarter",
+      "side",
+      "back",
+      "face"
+    ],
+    "resolution": [
+      900,
+      1200
+    ],
+    "background": [
+      0.24,
+      0.24,
+      0.24
+    ],
+    "lights": "key 3.0 W/m2 sun from front-left above, fill 1.0 from front-right, rim 1.5 from behind; AgX; Eevee or Cycles 32 samples",
+    "compare_with": "arthur"
+  },
+  "generation": {
+    "prompt_template": "{subject}, stylised 3D game character for a family action-adventure, storybook proportions (slightly large head, about 6 to 7 heads tall), soft hand-painted textures, warm earthy palette with one clear accent colour, clean readable silhouette, matte materials, small closed mouth, simple painted eyes with one small highlight, full body, A-pose, arms 30 degrees from body, feet pointing straight forward, plain neutral background, front view",
+    "avoid": "open mouth, visible teeth, glossy or wet eyes, photo-realistic skin, pores, heavy wrinkles, neon colours, glowing parts, armour spikes, busy noisy textures, T-pose, crossed arms, holding props, copying any existing game or film character",
+    "reference_images": [
+      "Arthur turnaround front (pipeline/style/ref/arthur_front.png)",
+      "the character's own approved concept sheet"
+    ],
+    "settings": "same generator, same version and same texture settings for every character; record them in the character entry"
+  }
+}
