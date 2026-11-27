@@ -117,3 +117,19 @@ Pipeline rules learned:
   painted cleanly, the same on both eyes. Roughness 0.5, low specular, no glassy look.
 - Character now uses 2 materials (limit 4). Backup: `Arthur_clean_before_eyes.blend`.
 - Comparison: `img/arthur_eyes_fixed.png`.
+
+## Rig on the shared Manny skeleton — passes
+- Built Arthur's skeleton from Manny's own (all 161 bones, same names and **same bone
+  orientations**), with joints moved to Arthur's body using his earlier 35-bone rig as the
+  guide; fingers and twist bones placed relative to their parents. Weights copied from the
+  earlier rig (25 deforming bones; fingers and twist bones carry no weight yet).
+- Two problems found and fixed with real walk tests (Manny's `MM_Walk_Fwd` applied in Blender):
+  1. Bones turned to follow Arthur's limbs made him hunch forward in the walk. Shared-skeleton
+     rule: keep Manny's bone orientations, move only the joint positions.
+  2. Arthur's arms hung closer to his body than Manny's, so his hands crossed in front of him.
+     Fix: re-posed his arms to Manny's A-pose angle and made that his rest pose.
+- Unreal: `/Game/Characters/ArthurPipeline/SK_Arthur` on `SK_Mannequin`, 160 cm, 39,329
+  triangles, LODs 28.7k / 7.7k / 4.3k vertices, materials `M_Arthur` + `M_Arthur_Eyes`.
+  Manny animations play on him directly, no retargeter needed. Walk: `img/arthur_manny_walk.png`.
+- Old Arthur versions untouched. Test actors `PipelineTest_*` placed in ThirdPersonMap at
+  Y≈6000 for a visual check.
