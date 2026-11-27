@@ -61,3 +61,18 @@ onto the reduced mesh.
   original painted textures still line up.
 - Output on Henry: `Documents\SpacePiece_Blender\ArthurAdv\pipeline\` (Arthur_clean.blend,
   T_Arthur_D/N/RM). Not imported into Unreal yet; waiting for approval (hero = ask first).
+
+## Face fixes (ask tier, awaiting approval)
+
+- **Mouth:** Tripo painted teeth onto the lip surface, so the lips looked see-through.
+  Repainted those texels with a lip tone (`T_Arthur_D_v2`).
+- **Eyes:** the eye roughness in the RM map was 0.03 (mirror-like), giving big glassy
+  reflections. Raised to 0.5 in the eye area (`T_Arthur_RM_v2`, Non-Color) and painted a small
+  catchlight on each pupil.
+- Comparison: `img/arthur_expression_fix.png`.
+
+## Lesson: don't recalculate normals on multi-piece models
+A "recalculate outside" pass during cleanup flipped 9,636 of 39,329 faces inside-out. The
+Workbench preview hid it (no backface culling); an Eevee render with culling showed holes.
+Fixed by matching each face's direction to the nearest face on the untouched source.
+Rule added: after cleanup, compare face directions against the source; any mismatch = auto-fix.
