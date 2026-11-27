@@ -153,3 +153,12 @@ Manny's skeleton, which would make Manny animations blow the mesh up 100x. Worki
 model and rig in **meters** (Arthur 1.6 m), scene unit scale **1.0**, a real `root` bone, armature
 object named `Armature`, FBX export Apply Scalings **FBX_SCALE_NONE**. Result in UE: root scale 1,
 160 cm. Test files compared all three scaling modes.
+
+## Slash tipped Arthur over — cause and fix
+The montage swap was made in `BP_ArthurAdvCharacter` (old character) instead of `BP_Arthur`, so
+the new character kept playing the old-skeleton slash, which tipped him over. Fixed without
+another manual step: `BP_Arthur` rebuilt from the edited blueprint (new montage) with the new
+mesh, anim blueprint and sword offsets; a working copy of the old character saved as
+`BP_ArthurAdvCharacter_Legacy` (old mesh, old montage). Game mode -> `BP_Arthur`. Swords
+verified in place on both.
+Lesson: when a manual editor step is needed, give the full asset path and ask for a screenshot.
