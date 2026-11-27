@@ -96,3 +96,13 @@ Pipeline rules learned:
 - Clear imported custom normals before any shape change, and merge seam duplicates first.
 - Check faces against the source after every geometry step.
 - Preview with real lighting (Eevee, backface culling on), not the flat Workbench view.
+
+## Mouth, third pass — stopped; this is a "reject / regenerate the face" case
+- Eyes: earlier renders used harsh one-light Eevee, which made the eyes look worse than they
+  are. With even lighting, and the original eye colours restored (only the shine softened),
+  they match the source again. Rule: always compare before/after under the same lighting.
+- Mouth: the wide grin is sculpted into the model (clay render, `img/arthur_face_status.png`).
+  Painting and flattening at 39k triangles cannot remove it cleanly; attempts left creases or
+  faceting and were rolled back (backups `Arthur_clean_before_*.blend`).
+- Per the standard, rebuilding a face feature is beyond auto-fix. Options put to the user:
+  regenerate the head with a small closed mouth, hand-sculpt the mouth, or keep it for now.
