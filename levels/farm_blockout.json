@@ -1,0 +1,274 @@
+{
+  "name": "L_Farm_Blockout",
+  "units": "meters; X = east, Y = south (Unreal +Y), Z up; origin = farm centre",
+  "notes": "Positions come from the 2D prototype (scripts/world.gd, main.gd) scaled 1 px = 6.25 cm (2400x1600 px -> 150x100 m). Building sizes are real-world, set from Arthur at 1.6 m.",
+  "bounds": {
+    "min": [
+      -75,
+      -50
+    ],
+    "max": [
+      75,
+      50
+    ]
+  },
+  "ground": {
+    "size": [
+      190,
+      200
+    ],
+    "center": [
+      0,
+      -10
+    ]
+  },
+  "buildings": [
+    {
+      "id": "farmhouse",
+      "center": [
+        -6.25,
+        -26.56
+      ],
+      "size": [
+        12,
+        9
+      ],
+      "wall_h": 5.5,
+      "ridge_h": 8.5,
+      "door": "south",
+      "role": "family home; dinner scene inside (interior later)"
+    },
+    {
+      "id": "barn",
+      "center": [
+        28.75,
+        -27.19
+      ],
+      "size": [
+        14,
+        11
+      ],
+      "wall_h": 6.0,
+      "ridge_h": 9.5,
+      "door": "south",
+      "role": "barn"
+    },
+    {
+      "id": "cottage",
+      "center": [
+        -38,
+        -26
+      ],
+      "size": [
+        7,
+        6
+      ],
+      "wall_h": 3.2,
+      "ridge_h": 5.5,
+      "door": "south",
+      "role": "decorative"
+    }
+  ],
+  "paths": [
+    {
+      "id": "house_path",
+      "from": [
+        -5.94,
+        -18.75
+      ],
+      "to": [
+        -5.94,
+        25.0
+      ],
+      "width": 3
+    },
+    {
+      "id": "farm_road",
+      "from": [
+        -43.75,
+        -13.44
+      ],
+      "to": [
+        37.5,
+        -13.44
+      ],
+      "width": 3
+    },
+    {
+      "id": "barn_path",
+      "from": [
+        27.81,
+        -18.75
+      ],
+      "to": [
+        27.81,
+        -13.44
+      ],
+      "width": 3
+    },
+    {
+      "id": "backyard_path",
+      "from": [
+        -5.94,
+        -34.38
+      ],
+      "to": [
+        -6.9,
+        -50
+      ],
+      "width": 2.5
+    }
+  ],
+  "field": {
+    "center": [
+      -42.5,
+      0.62
+    ],
+    "size": [
+      32,
+      24
+    ],
+    "rows_along": "X",
+    "row_spacing": 2.9
+  },
+  "pen": {
+    "center": [
+      28.12,
+      10.62
+    ],
+    "size": [
+      24,
+      16
+    ],
+    "gate": "west",
+    "hay_bales": [
+      [
+        20.0,
+        6.25
+      ],
+      [
+        35.0,
+        12.5
+      ]
+    ]
+  },
+  "props": [
+    {
+      "id": "hen_a_wen",
+      "pos": [
+        -31.25,
+        -0.62
+      ],
+      "note": "the chore starts here"
+    },
+    {
+      "id": "oil_tub",
+      "pos": [
+        15.0,
+        -11.25
+      ],
+      "note": "empty the oil here"
+    },
+    {
+      "id": "metal_rod",
+      "pos": [
+        22.5,
+        -15.94
+      ],
+      "note": "Arthur's first weapon"
+    },
+    {
+      "id": "player_start",
+      "pos": [
+        -23.75,
+        -2.5
+      ]
+    }
+  ],
+  "wolf_area": {
+    "spawns": [
+      [
+        48.75,
+        31.25
+      ],
+      [
+        59.38,
+        9.38
+      ],
+      [
+        31.25,
+        38.75
+      ]
+    ],
+    "pup_fence": {
+      "from": [
+        40,
+        26
+      ],
+      "to": [
+        52,
+        18
+      ],
+      "pup": [
+        45.62,
+        22.5
+      ]
+    },
+    "forest_corner": {
+      "min": [
+        30,
+        28
+      ],
+      "max": [
+        75,
+        50
+      ],
+      "density": "dense, with a clearing at the spawns"
+    }
+  },
+  "treeline": {
+    "band": 8,
+    "spacing": 5.5,
+    "gaps": [
+      {
+        "side": "north",
+        "x": -6.9,
+        "width": 6,
+        "why": "back gate, path to the escape hill"
+      }
+    ]
+  },
+  "escape_hill": {
+    "path_from": [
+      -6.9,
+      -50
+    ],
+    "crest": [
+      -6.9,
+      -82
+    ],
+    "crest_h": 12,
+    "plateau": [
+      22,
+      14
+    ],
+    "slope_deg": 18,
+    "lookback": "from the crest the whole farm is visible"
+  },
+  "out_of_scope_markers": [
+    {
+      "id": "crash_site",
+      "pos": [
+        -40.0,
+        28.12
+      ]
+    },
+    {
+      "id": "back_gate",
+      "pos": [
+        -6.9,
+        -50
+      ]
+    }
+  ]
+}
