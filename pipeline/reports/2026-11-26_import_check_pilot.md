@@ -133,3 +133,23 @@ Pipeline rules learned:
   Manny animations play on him directly, no retargeter needed. Walk: `img/arthur_manny_walk.png`.
 - Old Arthur versions untouched. Test actors `PipelineTest_*` placed in ThirdPersonMap at
   Y≈6000 for a visual check.
+
+## Playable: BP_Arthur
+- `BP_Arthur` (copy of `BP_ArthurAdvCharacter`): mesh `SK_Arthur`, anim blueprint `ABP_Arthur`
+  (copy of `ABP_ArthurAdv` moved to Manny's skeleton, now using Manny's own idle / walk-run /
+  jump / fall / land). Game mode default pawn switched to `BP_Arthur`; switch back by setting it
+  to `BP_ArthurAdvCharacter`.
+- Sword clips and montages retargeted once from the old skeleton with
+  `RTG_ArthurAdv_to_Arthur` (arms aligned to the new A-pose; finger chains off) into
+  `ArthurPipeline/Sword/`.
+- Hip and back swords re-attached so they sit exactly where they were (checked to 0.1 cm).
+  `SwordHand` (hidden, not used yet) not re-fitted.
+- Manual step left: the Play Montage node in `BP_Arthur` still points at the old
+  `AM_Slash_Outward_Fast`; Python in UE 5.4 can't edit graph pins.
+
+## Export recipe (fixed)
+A root bone scale of 0.01 appeared with the old "unit scale 0.01" recipe once the rig was on
+Manny's skeleton, which would make Manny animations blow the mesh up 100x. Working recipe:
+model and rig in **meters** (Arthur 1.6 m), scene unit scale **1.0**, a real `root` bone, armature
+object named `Armature`, FBX export Apply Scalings **FBX_SCALE_NONE**. Result in UE: root scale 1,
+160 cm. Test files compared all three scaling modes.
