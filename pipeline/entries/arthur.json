@@ -1,0 +1,41 @@
+{
+  "name": "Arthur",
+  "archetype": "biped",
+  "hero": true,
+  "class": "hero",
+  "height_cm": null,
+  "references": [
+    "Space Piece Drive folder: Arthur character sheets",
+    "claude project: Arthur_Adventurer_Measurements.md"
+  ],
+  "must_have": [
+    "white shirt",
+    "open vest, no laces",
+    "belt at waist",
+    "sword on hip"
+  ],
+  "unreal": {
+    "asset": "/Game/Characters/ArthurAdv/SK_ArthurAdv",
+    "target_folder": "/Game/Characters/Arthur/",
+    "target_skeleton": "/Game/Characters/Mannequins/Meshes/SK_Mannequin",
+    "older_versions": [
+      "/Game/Characters/Arthur/SK_Arthur",
+      "/Game/Characters/ArthurV2/SK_ArthurV2"
+    ]
+  },
+  "pipeline": {
+    "import_check": {
+      "date": "2026-11-26",
+      "verdict": "ASK",
+      "triangles": 191104,
+      "lods": 1,
+      "materials": 1,
+      "bones": 35,
+      "skeleton": "SK_ArthurAdv_Skeleton",
+      "size": "160 cm tall"
+    },
+    "log": [
+      "2026-11-26: first import check. Over budget 4.8x, 1 LOD, own skeleton (needs rig to Manny). Must-have parts need visual confirmation."
+    ]
+  }
+}
