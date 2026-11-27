@@ -26,7 +26,8 @@
     "materials": [
       "M_Arthur",
       "M_Arthur_Eyes"
-    ]
+    ],
+    "material_slots": 2
   },
   "pipeline": {
     "import_check": {
@@ -43,7 +44,8 @@
       "2026-11-26: first import check. Over budget 4.8x, 1 LOD, own skeleton (needs rig to Manny). Must-have parts need visual confirmation.",
       "2026-11-26: Blender check of Tripo source. Clean surface (no flipped or non-manifold), but 191k triangles, 98 cm tall (needs x1.63 to 160 cm), 16 debris pieces, 4K textures, no rig.",
       "2026-11-26: cleanup. 191,104 -> 39,329 triangles (head pass 0.35, body 0.175), 16 debris pieces removed, scaled to 160 cm, textures 4K -> 2K. Face visually unchanged. Not yet in Unreal.",
-      "2026-11-26: face approved (eyes rebuilt as own material, current mouth kept). Rigged on SK_Mannequin, rest pose matched to Manny's A-pose, imported to /Game/Characters/ArthurPipeline with 3 LODs. Final check: all pass."
+      "2026-11-26: face approved (eyes rebuilt as own material, current mouth kept). Rigged on SK_Mannequin, rest pose matched to Manny's A-pose, imported to /Game/Characters/ArthurPipeline with 3 LODs. Final check: all pass.",
+      "2026-11-26: fingers weighted (55 deforming bones); SwordHand re-fitted (same 7.3 cm offset from the hand as before); SK_Arthur re-imported clean with 2 material slots, 3 LODs, root scale 1."
     ],
     "blender_check": {
       "date": "2026-11-26",
@@ -69,16 +71,17 @@
     "rig": {
       "date": "2026-11-26",
       "skeleton": "SK_Mannequin, 161 bones, Manny bone orientations",
-      "deforming_bones": 25,
+      "deforming_bones": 55,
       "lods": [
         28677,
-        7695,
-        4305
+        7696,
+        4304
       ],
       "triangles": 39329,
       "height_cm": 160,
       "test": "MM_Walk_Fwd plays directly; walks forward; arms clear the body",
-      "blend": "C:\\Users\\johnn\\Documents\\SpacePiece_Blender\\ArthurAdv\\pipeline\\Arthur_rigged.blend"
+      "blend": "C:\\Users\\johnn\\Documents\\SpacePiece_Blender\\ArthurAdv\\pipeline\\Arthur_rigged.blend",
+      "fingers": "finger bones fitted to the hands, weighted and smoothed; half curl clean, full fist shows small gaps between fused fingers"
     }
   },
   "source": {

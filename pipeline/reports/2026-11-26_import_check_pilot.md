@@ -162,3 +162,15 @@ mesh, anim blueprint and sword offsets; a working copy of the old character save
 `BP_ArthurAdvCharacter_Legacy` (old mesh, old montage). Game mode -> `BP_Arthur`. Swords
 verified in place on both.
 Lesson: when a manual editor step is needed, give the full asset path and ask for a screenshot.
+
+## Arthur open items closed
+- **Fingers:** finger bones were outside the fingers (up to 3.7 cm). Refitted from the hand
+  geometry (four lanes across the hand, thumb found as its own cluster), Manny orientations
+  kept. Weights split from the hand onto 15 bones per hand, smoothed over the mesh. 55
+  deforming bones. Half curl is clean; a full fist opens small gaps between the fused fingers
+  (Tripo modelled them touching). Image: `img/arthur_fingers.png`.
+- **SwordHand:** re-fitted using the exact rigid move of the hand between the old and new rest
+  poses (fit error 0.05 mm); sword sits 7.32 cm from the hand bone, same as before.
+- **Material slots:** fresh import, old asset consolidated into it and renamed back to
+  `SK_Arthur`: 2 slots, 3 LODs (28,677 / 7,696 / 4,304 verts), root scale 1, 160 cm.
+- Still open: Zelda-style mouth (needs a Tripo generation).
