@@ -191,10 +191,10 @@ def buildings(L):
             slab(f"{b['id']}_roof_{side}", f,
                  (cx, cy + s * run, wh - drop), (cx, cy, rh), w + 2 * oh, 0.3, "roof")
         # gable end fill (stack of boxes, stepped) so the roof is not see-through
-        steps = 4
+        steps = 6
         for i in range(steps):
             hgt = (rh - wh) / steps
-            depth = d * (1 - (i + 0.5) / steps)
+            depth = d * (1 - (i + 1) / steps) - 0.1
             box(f"{b['id']}_gable_{i}", f, cx, cy, wh + hgt * (i + 0.5), w - 0.1, depth, hgt,
                 wall_col.get(b["id"], "wall_house"))
         # door on the south face (+Y)
@@ -203,9 +203,10 @@ def buildings(L):
 
 
 def paths(L):
-    for p in L["paths"]:
+    for i, p in enumerate(L["paths"]):
         (x0, y0), (x1, y1) = p["from"], p["to"]
-        slab(p["id"], "Paths", (x0, y0, 0.03), (x1, y1, 0.03), p["width"], 0.06, "path",
+        z = 0.03 + 0.01 * i
+        slab(p["id"], "Paths", (x0, y0, z), (x1, y1, z), p["width"], 0.06, "path",
              collide=False)
 
 
@@ -346,27 +347,33 @@ def wolf_area(L, rng):
 
 
 def escape_hill(L):
+    """Terraced hill: stacked oval layers (1 m each). Every layer's south edge sits exactly
+    on the ramp line, so the ramp is never buried; the other sides step back at ~38 deg."""
     h = L["escape_hill"]
     f = "EscapeHill"
     cx, cy = h["crest"]
     top = h["crest_h"]
     pw, pd = h["plateau"]
     gx, gy = h["path_from"]
-    py0, py1 = cy - pd / 2, cy + pd / 2      # north / south edge of the plateau
-    px0, px1 = cx - pw / 2, cx + pw / 2
-    # plateau block (goes below ground so no gaps show)
-    box("hill_plateau", f, cx, cy, (top - 2) / 2, pw, pd, top + 2, "hill_top")
-    # walkable south ramp: from the back gate up to the plateau's south edge
-    slab("hill_ramp_S", f, (cx, gy - 0.5, -0.3), (cx, py1, top), pw, 3.0, "hill")
-    # steeper sides (visual, still walkable)
-    run = top / math.tan(math.radians(38))
-    slab("hill_side_N", f, (cx, py0 - run, -0.3), (cx, py0, top), pw + 2 * run, 3.0, "hill")
-    slab("hill_side_E", f, (px1 + run, cy, -0.3), (px1, cy, top), pd + 2 * run, 3.0, "hill")
-    slab("hill_side_W", f, (px0 - run, cy, -0.3), (px0, cy, top), pd + 2 * run, 3.0, "hill")
-    # path up the ramp
-    slab("hill_path", f, (gx, gy, 0.03), (cx, py1 + 0.2, top + 0.03), 2.5, 0.06, "path",
+    north = cy - pd / 2
+    south = cy + pd / 2                       # plateau south edge, where the ramp arrives
+    ramp_start = gy - 0.5
+    layers = int(round(top))
+    for i in range(1, layers + 1):
+        z = top * i / layers
+        back = (top - z) / math.tan(math.radians(38))
+        s_edge = ramp_start + (south - ramp_start) * (z / top)   # where the ramp is at height z
+        n_edge = north - back
+        hx = pw / 2 + back
+        hy = (s_edge - n_edge) / 2
+        col = "hill_top" if i == layers else "hill"
+        spawn(CYL, f"hill_layer_{i:02d}", f, v(cx, (s_edge + n_edge) / 2, z / 2),
+              unreal.Vector(hx * 2, hy * 2, z), col)
+    # walkable ramp, 5 m wide, lying on the terrace edges
+    slab("hill_ramp", f, (cx, ramp_start, 0.0), (cx, south, top + 0.02), 5.0, 1.0, "hill")
+    slab("hill_path", f, (gx, gy, 0.04), (cx, south, top + 0.06), 2.5, 0.06, "path",
          collide=False)
-    ramp_deg = math.degrees(math.atan2(top, abs(py1 - gy)))
+    ramp_deg = math.degrees(math.atan2(top, abs(south - ramp_start)))
     unreal.log(f"[FarmBlockout] escape hill ramp slope = {ramp_deg:.1f} deg")
     return ramp_deg
 
