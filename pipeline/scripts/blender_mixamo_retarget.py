@@ -180,3 +180,63 @@ def export_action(dst, act, path):
                                  bake_anim=True, bake_anim_use_all_actions=False, bake_anim_use_nla_strips=False,
                                  bake_anim_force_startend_keying=True, bake_anim_simplify_factor=0.0)
     return path
+
+
+def ground_clip(dst, mesh, act, margin=0.005, rest_floor=None):
+    """Lift the pelvis on frames where the character's lowest point goes below the floor.
+    Different proportions (Arthur vs the Mixamo model) change where the body touches down,
+    so contact poses (rolls, falls, crouches) sink. Lift is the minimum needed per frame,
+    widened by one frame and smoothed so it never jitters. Returns the lift per frame (m)."""
+    import numpy as np
+    scn = bpy.context.scene
+    dst.animation_data.action = act
+    f0, f1 = int(act.frame_range[0]), int(act.frame_range[1])
+    mw = np.array(mesh.matrix_world)
+
+    def lowest():
+        dg = bpy.context.evaluated_depsgraph_get()
+        me = mesh.evaluated_get(dg).to_mesh()
+        co = np.empty(len(me.vertices) * 3)
+        me.vertices.foreach_get("co", co)
+        z = co.reshape(-1, 3) @ mw[2, :3] + mw[2, 3]
+        mesh.evaluated_get(dg).to_mesh_clear()
+        return float(z.min())
+    if rest_floor is None:
+        rest_floor = 0.0
+    need = []
+    for f in range(f0, f1 + 1):
+        scn.frame_set(f)
+        need.append(max(0.0, rest_floor - margin - lowest()) if lowest() < rest_floor - margin else 0.0)
+    need = np.array(need)
+    wide = np.maximum.reduce([np.roll(need, 1), need, np.roll(need, -1)])
+    wide[0], wide[-1] = max(need[0], need[1]), max(need[-1], need[-2])
+    k = np.array([0.25, 0.5, 0.25])
+    lift = np.maximum(np.convolve(np.pad(wide, 1, mode="edge"), k, mode="valid"), need)
+    pel = dst.data.bones["pelvis"]
+    dz_local = pel.matrix_local.to_3x3().inverted() @ (dst.matrix_world.to_3x3().inverted() @ Vector((0, 0, 1)))
+    fcs = {i: fc for fc in _fcurves(act) if fc.data_path == 'pose.bones["pelvis"].location' for i in [fc.array_index]}
+    for i, f in enumerate(range(f0, f1 + 1)):
+        if lift[i] <= 0:
+            continue
+        for ax in range(3):
+            fc = fcs[ax]
+            for kp in fc.keyframe_points:
+                if int(round(kp.co.x)) == f:
+                    kp.co.y += dz_local[ax] * lift[i]
+                    kp.handle_left.y += dz_local[ax] * lift[i]
+                    kp.handle_right.y += dz_local[ax] * lift[i]
+    for fc in fcs.values():
+        fc.update()
+    return lift
+
+
+def _fcurves(act):
+    """Blender 4.4+ slotted actions keep fcurves in layers/strips/channelbags."""
+    if hasattr(act, "fcurves") and len(act.fcurves):
+        return list(act.fcurves)
+    out = []
+    for layer in getattr(act, "layers", []):
+        for strip in layer.strips:
+            for cb in getattr(strip, "channelbags", []):
+                out += list(cb.fcurves)
+    return out
