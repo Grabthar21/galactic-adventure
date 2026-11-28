@@ -96,8 +96,8 @@ Rules:
 1. **Brief, in the character entry:** name, hero or not, group (child, teen, adult or creature), height, accent colour, must-have parts, and 1–3 reference pictures.
 2. **Concept sheet first**, front and side view, approved by you. Feedback is cheapest here: a picture, not a 3D model.
 3. **Generate the 3D model from the approved concept sheet plus Arthur's front view as a style reference,** using the prompt template below. Always use the same generator, version and settings, and record them in the entry.
-4. **Pipeline:** import check → cleanup → rig → **style check**, which auto-fixes material values and flags everything else.
-5. **One review round** on the standard turnaround (front, three-quarter, side, back, face close-up) under the same lights every time, next to Arthur. Give all feedback in one go, using the checklist below.
+4. **Pipeline:** import check → cleanup → rig → **report card** (`run_character.py`): style check, pose stress test, game-camera view and lineup on one page. Material values are fixed automatically; everything else is flagged.
+5. **One review round** on the report card: the standard turnaround (front, three-quarter, side, back, face close-up) under the same lights every time, next to Arthur. Give all feedback in one go, using the checklist below.
 6. Fixes, then a final check. Anything you correct becomes a new rule in section 12.
 
 **Prompt template** (also in `style_rules.json`):

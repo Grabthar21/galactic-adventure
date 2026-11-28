@@ -274,13 +274,11 @@ def render_turnaround(meshes, out_dir, name, rules, armature=None):
     scn = bpy.data.scenes.new("StyleReview")
     for o in meshes + ([armature] if armature else []):
         scn.collection.objects.link(o)
+    # Eevee on Henry (GPU). PIPELINE_RENDER_ENGINE=CYCLES for machines without a GPU.
     try:
-        scn.render.engine = "BLENDER_EEVEE"
+        scn.render.engine = os.environ.get("PIPELINE_RENDER_ENGINE", "BLENDER_EEVEE")
     except TypeError:
-        try:
-            scn.render.engine = "BLENDER_EEVEE_NEXT"
-        except TypeError:
-            scn.render.engine = "CYCLES"
+        scn.render.engine = "CYCLES"
     if scn.render.engine == "CYCLES":
         scn.cycles.samples = 32
         scn.cycles.use_denoising = True

@@ -4,6 +4,21 @@
   "hero": true,
   "class": "hero",
   "height_cm": 160,
+  "stage": "review",
+  "version": 1,
+  "style": {
+    "group": "human_teen",
+    "accent": null,
+    "note": "Arthur is the style reference; accent colour to be chosen by the user"
+  },
+  "blender": {
+    "file": "C:\\Users\\johnn\\Documents\\SpacePiece_Blender\\ArthurAdv\\pipeline\\Arthur_rigged.blend",
+    "meshes": [
+      "SK_Arthur"
+    ],
+    "armature": "Armature",
+    "reference": []
+  },
   "references": [
     "Space Piece Drive folder: Arthur character sheets",
     "claude project: Arthur_Adventurer_Measurements.md"
@@ -45,7 +60,8 @@
       "2026-11-26: Blender check of Tripo source. Clean surface (no flipped or non-manifold), but 191k triangles, 98 cm tall (needs x1.63 to 160 cm), 16 debris pieces, 4K textures, no rig.",
       "2026-11-26: cleanup. 191,104 -> 39,329 triangles (head pass 0.35, body 0.175), 16 debris pieces removed, scaled to 160 cm, textures 4K -> 2K. Face visually unchanged. Not yet in Unreal.",
       "2026-11-26: face approved (eyes rebuilt as own material, current mouth kept). Rigged on SK_Mannequin, rest pose matched to Manny's A-pose, imported to /Game/Characters/ArthurPipeline with 3 LODs. Final check: all pass.",
-      "2026-11-26: fingers weighted (55 deforming bones); SwordHand re-fitted (same 7.3 cm offset from the hand as before); SK_Arthur re-imported clean with 2 material slots, 3 LODs, root scale 1."
+      "2026-11-26: fingers weighted (55 deforming bones); SwordHand re-fitted (same 7.3 cm offset from the hand as before); SK_Arthur re-imported clean with 2 material slots, 3 LODs, root scale 1.",
+      "2026-11-27: entry set up for the report card and approved-asset protection; stage 'review' until the user approves v1 (approval fingerprints and locks the files above)"
     ],
     "blender_check": {
       "date": "2026-11-26",
@@ -88,5 +104,29 @@
     "file": "C:\\Users\\johnn\\Downloads\\adventurer character 3d model.glb",
     "generator": "Tripo",
     "date": "2026-11-14"
+  },
+  "protect": {
+    "files": [
+      "C:\\Users\\johnn\\Documents\\SpacePiece_Blender\\ArthurAdv\\pipeline\\Arthur_rigged.blend",
+      "C:\\Users\\johnn\\Documents\\SpacePiece_Blender\\ArthurAdv\\pipeline\\SK_Arthur.fbx",
+      "C:\\Users\\johnn\\Documents\\SpacePiece_Blender\\ArthurAdv\\pipeline\\T_Arthur_D_v2.jpg",
+      "C:\\Users\\johnn\\Documents\\SpacePiece_Blender\\ArthurAdv\\pipeline\\T_Arthur_N.png",
+      "C:\\Users\\johnn\\Documents\\SpacePiece_Blender\\ArthurAdv\\pipeline\\T_Arthur_RM_v2.jpg",
+      "C:\\Users\\johnn\\Documents\\SpacePiece_Blender\\ArthurAdv\\pipeline\\T_Arthur_Eyes.png"
+    ],
+    "unreal": [
+      "/Game/Characters/ArthurPipeline/SK_Arthur",
+      "/Game/Characters/ArthurPipeline/M_Arthur",
+      "/Game/Characters/ArthurPipeline/M_Arthur_Eyes",
+      "/Game/Characters/ArthurPipeline/T_Arthur_D",
+      "/Game/Characters/ArthurPipeline/T_Arthur_N",
+      "/Game/Characters/ArthurPipeline/T_Arthur_RM",
+      "/Game/Characters/ArthurPipeline/T_Arthur_Eyes",
+      "/Game/Characters/ArthurPipeline/ABP_Arthur",
+      "/Game/Characters/ArthurPipeline/BP_Arthur",
+      "/Game/Characters/ArthurPipeline/RTG_ArthurAdv_to_Arthur",
+      "/Game/Characters/ArthurPipeline/Sword/AM_Slash_Outward_Fast"
+    ],
+    "content_root": "C:\\Users\\johnn\\Documents\\Unreal Projects\\SpacePiece3D\\Content"
   }
 }
