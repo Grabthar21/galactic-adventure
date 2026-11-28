@@ -147,7 +147,7 @@ def apply_pose(arm, pose):
     fingers = pose.get("__fingers__")
     for pb in order:
         steps = list(pose.get(pb.name, []))
-        if fingers and any(pb.name.startswith(f) for f in FINGERS):
+        if fingers and any(pb.name.startswith(f) for f in FINGERS) and "metacarpal" not in pb.name:
             steps = [("spread", -fingers * (0.6 if pb.name.startswith("thumb") else 1.0))]  # curl toward the palm (palms face the body in A-pose)
         if not steps:
             continue
