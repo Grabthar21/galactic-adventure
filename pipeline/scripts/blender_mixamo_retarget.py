@@ -131,7 +131,11 @@ def retarget(src, dst, name, frames=None, root_motion=True, scale=None):
                 qa = (rot_aw.inverted() @ qw).normalized()
                 loc = chain.to_translation()
                 if n == "pelvis":  # absolute position; the root bone carries the horizontal travel
-                    loc = aw_inv @ (pel_rest_pos + (hips_pos - hips_rest_pos) * k)
+                    # horizontal offset is measured from the clip's FIRST frame, not Mixamo's rest,
+                    # so a trimmed clip starts with the body over the character (no pop on start/end)
+                    start_off = start_hips - hips_rest_pos
+                    disp = (hips_pos - hips_rest_pos) - Vector((start_off.x, start_off.y, 0))
+                    loc = aw_inv @ (pel_rest_pos + disp * k)
                 desired = Matrix.Translation(loc) @ qa.to_matrix().to_4x4()
             elif n == "root" and root_motion:
                 rd = (hips_pos - start_hips) * k
