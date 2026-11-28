@@ -74,16 +74,17 @@
     "max_near_white_frac": 0.02,
     "saturation_mean": [
       0.18,
-      0.62
+      0.8
     ],
     "max_neon_frac": 0.01,
     "neon": {
       "saturation": 0.85,
       "value": 0.85
     },
-    "max_detail_noise": 0.055,
-    "_detail_noise": "Mean absolute difference between the texture and a 3-pixel blur of itself (0-1). Photo-like or speckled textures score high; painted textures score low. Provisional: calibrate on Arthur's T_Arthur_D_v2 when Henry is back.",
-    "max_size": 2048
+    "max_detail_noise": 0.035,
+    "_detail_noise": "Mean absolute difference between the texture and a 3-pixel blur of itself (0-1), measured at 512 px. Calibrated 27 Nov on Henry: Arthur's painted T_Arthur_D_v2 = 0.013, photo-like test textures = 0.066-0.104.",
+    "max_size": 2048,
+    "_calibration": "Arthur (approved look): saturation 0.71, near-black 0.01%, near-white 0.12%, noise 0.013. Eye textures are exempt from the dark/bright/colour checks (pupils and whites)."
   },
   "material": {
     "roughness": 0.85,

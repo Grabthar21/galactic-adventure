@@ -189,9 +189,9 @@ def check_textures(report, rules, meshes):
             big = max(st["size"])
             _result(report, f"texture size {tag}", "PASS" if big <= r["max_size"] else "FIX",
                     f"{st['size'][0]}x{st['size'][1]} (max {r['max_size']}; cleanup downsizes)", big)
-            _result(report, f"too dark {tag}", "PASS" if nb <= r["max_near_black_frac"] else "ASK",
-                    f"{nb:.1%} near-black (max {r['max_near_black_frac']:.0%}); black reads as holes in game", nb)
-            if not is_eye:  # eye whites are meant to be bright
+            if not is_eye:  # pupils are meant to be dark, eye whites bright
+                _result(report, f"too dark {tag}", "PASS" if nb <= r["max_near_black_frac"] else "ASK",
+                        f"{nb:.1%} near-black (max {r['max_near_black_frac']:.0%}); black reads as holes in game", nb)
                 _result(report, f"too bright {tag}", "PASS" if nw <= r["max_near_white_frac"] else "ASK",
                         f"{nw:.1%} near-white (max {r['max_near_white_frac']:.0%}); blows out in sunlight", nw)
             lo, hi = r["saturation_mean"]
@@ -201,7 +201,7 @@ def check_textures(report, rules, meshes):
             _result(report, f"neon {tag}", "PASS" if neon <= r["max_neon_frac"] else "ASK",
                     f"{neon:.1%} neon pixels (max {r['max_neon_frac']:.0%})", neon)
             _result(report, f"painted look {tag}", "PASS" if st["noise"] <= r["max_detail_noise"] else "ASK",
-                    f"detail noise {st['noise']:.3f} (max {r['max_detail_noise']}, provisional); high = photo-like or speckled", st["noise"])
+                    f"detail noise {st['noise']:.3f} (max {r['max_detail_noise']}; Arthur 0.013); high = photo-like or speckled", st["noise"])
 
 
 # ------------------------------------------------------------------ materials
@@ -320,13 +320,13 @@ def render_turnaround(meshes, out_dir, name, rules, armature=None):
     head_c = Vector((centre.x, centre.y, mx.z - 0.08 * h))
     if armature and armature.data.bones.get("head"):
         b = armature.data.bones["head"]
-        head_c = (armature.matrix_world @ b.head_local + Vector((0, 0, 0.09 * h)))
+        head_c = (armature.matrix_world @ b.head_local + Vector((0, 0, 0.065 * h)))
     views = {
         "front": (0, centre, h * 1.15),
         "three_quarter": (35, centre, h * 1.15),
         "side": (90, centre, h * 1.15),
         "back": (180, centre, h * 1.15),
-        "face": (15, head_c, h * 0.22),
+        "face": (15, head_c, h * 0.25),
     }
     paths = []
     for vname in rv["turnaround"]:
