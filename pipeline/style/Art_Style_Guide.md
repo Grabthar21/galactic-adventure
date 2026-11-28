@@ -123,13 +123,13 @@ The prompt describes the style instead of naming another game, so the generator 
 | Area | Measured | If it fails |
 |---|---|---|
 | Proportions | head, arm and leg size compared with height, by group | ASK |
-| Base-colour textures | near-black, near-white, colour strength, neon, photo-like noise, size | ASK (size: FIX in cleanup) |
+| Base-colour textures | near-black, near-white, colour strength, neon, photo-like noise, size (eye textures: neon, noise, size only) | ASK (size: FIX in cleanup) |
 | Materials | roughness, specular, metallic (metal parts excepted) | **auto-fixed**, logged |
 | Face | own eye material on heroes, eye texture ≥ 512 | ASK |
 | Face details | mouth, eye shine, eye whites, eye symmetry, brows | CHECK on the face render |
 
 - Heroes stay on ask-first for anything that changes their look (pipeline standard).
-- The "painted look" noise limit (0.055) is provisional. **Calibrate it on Arthur's texture** the next time Henry is on.
+- Limits calibrated on Arthur, 27 Nov: painted-look noise max 0.035 (Arthur 0.013, photo-like 0.066+); colour strength 0.18–0.80 (Arthur 0.71, warm browns read as strong colour); eye textures skip the dark/bright/colour checks.
 
 ## 12. Rules learned (log)
 | Date | Problem | Rule |
