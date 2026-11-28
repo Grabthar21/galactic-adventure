@@ -1,4 +1,4 @@
-"""Builds Arthur_LockOn_Nodes.txt: Zelda-style lock-on for BP_Arthur.
+"""Lock-on part of Arthur_Combat_Nodes.txt: Zelda-style lock-on for BP_Arthur.
 
 Tab (keyboard) or Left Trigger (gamepad) toggles. Locking picks the nearest actor tagged
 "Lockable" within LOCK_RANGE. While locked, every frame the camera (control rotation)
@@ -6,11 +6,10 @@ turns smoothly toward the target and Arthur faces where the camera faces, so W/S
 toward/away from the target and A/D circle it. Lock drops past BREAK_RANGE or when the
 target is gone (killed, despawned).
 
-Needs two BP_Arthur variables, added by ue_lockon_setup.py: LockTarget (Actor), IsLockedOn (bool).
-Run: python gen_lockon_nodes.py  -> writes Arthur_LockOn_Nodes.txt next to this file.
+Needs two BP_Arthur variables, added by ue_arthur_combat_setup.py: LockTarget (Actor), IsLockedOn (bool).
+Built into Arthur_Combat_Nodes.txt by gen_arthur_combat_nodes.py (shares Event Tick).
 """
-import os
-from t3d import Graph, ENGINE, STRUCT
+from t3d import G, ENGINE, STRUCT
 
 LOCK_RANGE = 1500.0   # 15 m: how far away a target can be picked
 BREAK_RANGE = 2200.0  # 22 m: lock drops when the target gets this far away
@@ -21,7 +20,7 @@ VEC, ROT = STRUCT.format("Vector"), STRUCT.format("Rotator")
 ACTOR = ENGINE.format("Actor")
 CMC = "CharacterMovementComponent"
 
-g = Graph("Lock")
+g = G("Lock")
 L = g.link
 
 g.comment("Box", -80, -140, 3500, 1500,
@@ -101,8 +100,10 @@ L(cmc2["CharacterMovement"], desired_off["self"])
 Y = 700
 tick = g.event("Tick", "Actor", "ReceiveTick", 0, Y, outs=[("DeltaSeconds", "real", "float")])
 is_locked2 = g.get("IsLocked2", "IsLockedOn", 0, Y + 160, "bool")
+tick_seq = g.seq("Tick", 120, Y + 300)  # then_0 lock-on, then_1 free for other per-frame work
+L(tick["then"], tick_seq["execute"])
 br_tick = g.branch("Tick", 260, Y)
-L(tick["then"], br_tick["execute"])
+L(tick_seq["then_0"], br_tick["execute"])
 L(is_locked2["IsLockedOn"], br_tick["Condition"])
 
 tgt = g.get("Target1", "LockTarget", 260, Y + 260, "object", obj=ACTOR)
@@ -162,9 +163,3 @@ L(br_keep["then"], set_ctrl["execute"])
 L(get_ctrl["ReturnValue"], set_ctrl["self"])
 L(interp["ReturnValue"], set_ctrl["NewRotation"])
 
-if __name__ == "__main__":
-    nodes, links = g.check()
-    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Arthur_LockOn_Nodes.txt")
-    with open(out, "w", newline="") as f:
-        f.write(g.dump())
-    print(f"{nodes} nodes, {links} links -> {out} ({os.path.getsize(out)} bytes)")

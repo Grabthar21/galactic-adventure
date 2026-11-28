@@ -147,3 +147,119 @@ class Graph:
                 for q in p.links:
                     assert p in q.links
         return len(self.nodes), sum(len(p.links) for n in self.nodes for p in n.pins.values()) // 2
+
+
+# ---------------------------------------------------------------------------
+# Shorthand layer: pin types as short codes, so big graphs stay readable.
+#   e exec | b bool | i int | f float | d double | n name | s string | v vector | r rotator
+#   o / o:Actor / o:/Game/...BP_Arthur.BP_Arthur_C  object of that class
+BPCLASS = "/Script/Engine.BlueprintGeneratedClass'{}'"
+
+
+def _ptype(code):
+    if code == "e":
+        return dict(cat="exec")
+    if code == "b":
+        return dict(cat="bool")
+    if code == "i":
+        return dict(cat="int")
+    if code == "f":
+        return dict(cat="real", sub="float")
+    if code == "d":
+        return dict(cat="real", sub="double")
+    if code == "n":
+        return dict(cat="name")
+    if code == "s":
+        return dict(cat="string")
+    if code == "v":
+        return dict(cat="struct", obj=STRUCT.format("Vector"))
+    if code == "r":
+        return dict(cat="struct", obj=STRUCT.format("Rotator"))
+    if code == "o":
+        return dict(cat="object")
+    if code.startswith("o:"):
+        c = code[2:]
+        return dict(cat="object", obj=BPCLASS.format(c) if c.startswith("/Game/") else ENGINE.format(c))
+    if code.startswith("a:"):
+        d = _ptype("o:" + code[2:])
+        d["array"] = True
+        return d
+    raise ValueError(code)
+
+
+def _fmt(code, value):
+    if value is None:
+        return None
+    if code == "v":
+        return ",".join(f"{float(c):.6f}" for c in value)
+    if code == "b":
+        return "true" if value else "false"
+    if code in ("f", "d"):
+        return f"{float(value):.6f}"
+    return str(value)
+
+
+class G(Graph):
+    """Graph with shorthand helpers. ins/outs: {pin: code} or {pin: (code, default)}."""
+
+    def fn(self, tag, owner, func, x, y, ins=None, outs=None, pure=True, target=None, self_ctx=False):
+        n = self.call(tag, owner, func, x, y, pure=pure, target=target, self_ctx=self_ctx)
+        for name, spec in (ins or {}).items():
+            code, dv = spec if isinstance(spec, tuple) else (spec, None)
+            n.pin(name, default=_fmt(code, dv), **_ptype(code))
+        for name, code in (outs or {}).items():
+            n.pin(name, out=True, **_ptype(code))
+        return n
+
+    def math(self, tag, func, x, y, ins, out="d"):
+        return self.fn(tag, "KismetMathLibrary", func, x, y, ins, {"ReturnValue": out})
+
+    def seq(self, tag, x, y, n=2):
+        node = Node(self, "/Script/BlueprintGraph.K2Node_ExecutionSequence", self._n("ExecutionSequence", tag), x, y)
+        node.pin("execute")
+        for i in range(n):
+            node.pin(f"then_{i}", out=True, friendly=f"Then {i}")
+        return node
+
+    def switch_name(self, tag, x, y, options):
+        props = [f'PinNames({i})="{o}"' for i, o in enumerate(options)]
+        props += ['FunctionName="NotEqual_NameName"', f'FunctionClass="{ENGINE.format("KismetMathLibrary")}"']
+        node = Node(self, "/Script/BlueprintGraph.K2Node_SwitchName", self._n("SwitchName", tag), x, y, props)
+        node.pin("execute").pin("Selection", cat="name").pin("Default", out=True)
+        for o in options:
+            node.pin(o, out=True)
+        return node
+
+    def cast(self, tag, bp_class_path, display, x, y):
+        """Pure cast to a Blueprint class. Output pin is 'As<display>'."""
+        node = Node(self, "/Script/BlueprintGraph.K2Node_DynamicCast", self._n("DynamicCast", tag), x, y,
+                    [f'TargetType="{BPCLASS.format(bp_class_path)}"', "bIsPureCast=True"])
+        node.pin("Object", cat="object")
+        node.pin(f"As{display}", out=True, cat="object", obj=BPCLASS.format(bp_class_path))
+        node.pin("bSuccess", out=True, cat="bool")
+        return node
+
+    def var(self, tag, member, code, x, y, owner_bp=None):
+        """Get a variable: own (owner_bp None) or on another Blueprint class (needs 'self' pin wired)."""
+        if owner_bp is None:
+            return self.get(tag, member, x, y, **_ptype(code))
+        node = Node(self, "/Script/BlueprintGraph.K2Node_VariableGet", self._n("VariableGet", tag), x, y,
+                    [f'VariableReference=(MemberParent="{BPCLASS.format(owner_bp)}",MemberName="{member}")'])
+        node.pin(member, out=True, **_ptype(code))
+        node.pin("self", cat="object", obj=BPCLASS.format(owner_bp), friendly="Target")
+        return node
+
+    def setv(self, tag, member, code, x, y, value=None, owner_bp=None):
+        if owner_bp is None:
+            return self.set(tag, member, x, y, value=_fmt(code, value), **_ptype(code))
+        node = Node(self, "/Script/BlueprintGraph.K2Node_VariableSet", self._n("VariableSet", tag), x, y,
+                    [f'VariableReference=(MemberParent="{BPCLASS.format(owner_bp)}",MemberName="{member}")'])
+        node.pin("execute").pin("then", out=True).pin(member, default=_fmt(code, value), **_ptype(code))
+        node.pin("self", cat="object", obj=BPCLASS.format(owner_bp), friendly="Target")
+        return node
+
+    def chain(self, *nodes):
+        """Link then -> execute down a list of impure nodes."""
+        for a, b in zip(nodes, nodes[1:]):
+            self.link(a["then"], b["execute"])
+        return nodes[-1]

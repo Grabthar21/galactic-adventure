@@ -1,0 +1,37 @@
+{
+  "name": "Wolf",
+  "archetype": "quadruped",
+  "hero": false,
+  "class": "enemy",
+  "height_cm": 75,
+  "stage": "design",
+  "version": 0,
+  "style": {
+    "group": "creature",
+    "accent": null,
+    "note": "Art Style Guide 9: stylised, slightly chunky, readable eyes; predator = sharper shapes, no gore. Grey with lighter belly (2D wolf)."
+  },
+  "must_have": [
+    "readable eyes",
+    "sharper predator silhouette",
+    "grey coat, lighter belly"
+  ],
+  "size": {
+    "shoulder_cm": 75,
+    "length_cm": 140,
+    "against": "Arthur 160 cm"
+  },
+  "unreal": {
+    "asset": "/Game/Creatures/Wolf/BP_Wolf",
+    "target_folder": "/Game/Creatures/Wolf/",
+    "model": "stand-in blocks (Visual component) until the model is chosen"
+  },
+  "animation": {
+    "family": "light/predator (lion source), quadruped 9-chain IK template"
+  },
+  "pipeline": {
+    "log": [
+      "2026-11-28: design + stand-in AI from the 2D wolf (pipeline/Wolf_Design.md). ue_wolf_setup.py + Wolf_AI_Nodes.txt ready; model source to be chosen (Blender by hand / Sprixen-Tripo with credits / Fab)."
+    ]
+  }
+}

@@ -1,8 +1,10 @@
-"""Prepares BP_Arthur and the farm level for the lock-on nodes (Arthur_LockOn_Nodes.txt).
+"""Prepares BP_Arthur and the farm level for Arthur_Combat_Nodes.txt (lock-on, sword hits, taking hits).
 
 Run in the Unreal editor (Python). It:
-  1. adds two variables to BP_Arthur: LockTarget (Actor) and IsLockedOn (bool)
-  2. checks the Event Graph for an existing Event Tick or Tab key event (the paste adds both)
+  1. adds BP_Arthur variables: LockTarget (Actor), IsLockedOn, SwingDone1-3 (bool),
+     PendingDamage, DamageTaken (real), AttackersNow (int)
+  2. checks the Event Graph for an existing Event Tick, Event AnyDamage or Tab key event
+     (the paste adds all three)
   3. places two practice posts tagged "Lockable" near the player start in L_Farm_Blockout
 Paste the nodes after this, then compile. Safe to run twice.
 """
@@ -21,8 +23,15 @@ report = []
 
 
 def pin_type(kind):
-    if kind == "bool":
-        return BEL.get_basic_type_by_name("bool")
+    if kind in ("bool", "int"):
+        return BEL.get_basic_type_by_name(kind)
+    if kind == "real":
+        t = BEL.get_basic_type_by_name("real")
+        try:
+            t.set_editor_property("pin_sub_category", "double")
+        except Exception:  # noqa: BLE001
+            pass
+        return t
     if hasattr(BEL, "get_object_reference_type"):
         return BEL.get_object_reference_type(unreal.Actor)
     t = unreal.EdGraphPinType()
@@ -50,7 +59,9 @@ def graph_text(bp):
 
 
 bp = EAL.load_asset(BP_PATH)
-for name, kind in (("LockTarget", "actor"), ("IsLockedOn", "bool")):
+VARS = (("LockTarget", "actor"), ("IsLockedOn", "bool"), ("SwingDone1", "bool"), ("SwingDone2", "bool"),
+        ("SwingDone3", "bool"), ("PendingDamage", "real"), ("DamageTaken", "real"), ("AttackersNow", "int"))
+for name, kind in VARS:
     try:
         ok = BEL.add_member_variable(bp, name, pin_type(kind))
         report.append(f"variable {name}: {'added' if ok else 'already there'}")
@@ -66,8 +77,10 @@ if txt:
                       "and connect the existing one to the lock-on Branch")
     if "InputKey=Tab" in txt:
         report.append("WARNING: a Tab key event already exists - lock-on paste would add a second one")
-    if "InputKey=Tab" not in txt and "ReceiveTick" not in txt:
-        report.append("graph check: no Event Tick or Tab event yet - paste is clear to go")
+    if "ReceiveAnyDamage" in txt:
+        report.append("WARNING: BP_Arthur already has an Event AnyDamage - merge by hand after pasting")
+    if not any(k in txt for k in ("InputKey=Tab", "ReceiveTick", "ReceiveAnyDamage")):
+        report.append("graph check: no Event Tick, AnyDamage or Tab event yet - paste is clear to go")
 
 # practice posts
 les = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)

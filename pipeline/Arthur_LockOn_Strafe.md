@@ -10,14 +10,14 @@ Anything can be a target by giving the actor the tag **`Lockable`**. The wolf wi
 ## Status
 | Part | State |
 |---|---|
-| Lock-on Blueprint nodes (`pipeline/scripts/ue_paste/Arthur_LockOn_Nodes.txt`, 40 nodes) | ready; made by `gen_lockon_nodes.py` |
-| BP_Arthur variables + practice posts (`pipeline/scripts/ue_lockon_setup.py`) | ready |
+| Lock-on Blueprint nodes (`pipeline/scripts/ue_paste/Arthur_Combat_Nodes.txt`, together with sword hits and taking hits; see Wolf_Design.md) | ready; made by `gen_arthur_combat_nodes.py` |
+| BP_Arthur variables + practice posts (`pipeline/scripts/ue_arthur_combat_setup.py`) | ready |
 | Retarget: `in_place` and `mirror` options (`blender_mixamo_retarget.py`) | done, tested in Blender 5.3 (`test_retarget_options.py`) |
 | Strafe set builder (`pipeline/scripts/blender_lockon_set.py`) | ready, tested on a stand-in rig |
 | Clip import + blend space `BS_Arthur_LockOn` (`pipeline/scripts/ue_lockon_strafe_import.py`) | ready; setting blend-space samples from Python is untested in UE 5.4 |
 | ABP_Arthur: play `BS_Arthur_LockOn` while `IsLockedOn` | to do on Henry (needs seeing the anim graph) |
 
-## Tuning numbers (top of `gen_lockon_nodes.py`; re-run it to rebuild the paste file)
+## Tuning numbers (top of `gen_lockon_nodes.py`; re-run `gen_arthur_combat_nodes.py` to rebuild the paste file)
 - `LOCK_RANGE` 1500: how far away a target can be picked (cm).
 - `BREAK_RANGE` 2200: when the lock lets go (cm).
 - `CAM_PITCH` -12: how much the camera looks down while locked (degrees).
@@ -46,9 +46,9 @@ walk/run (Manny), strafe left/right and walk back by **Direction** and **Speed**
 - Optional for nicer strafes: "Sword And Shield Strafe" (left and right).
 
 ## Henry steps (I do these by remote; nothing for you to paste)
-1. Unreal: run `ue_lockon_setup.py` (variables, graph check, two red practice posts east of the
+1. Unreal: run `ue_arthur_combat_setup.py` (variables, graph check, two red practice posts east of the
    player start in `L_Farm_Blockout`).
-2. Paste `Arthur_LockOn_Nodes.txt` into `/Game/Characters/ArthurPipeline/BP_Arthur` Event Graph →
+2. Paste `Arthur_Combat_Nodes.txt` into `/Game/Characters/ArthurPipeline/BP_Arthur` Event Graph →
    Compile → Save. Test: Play, walk to the posts, press Tab.
 3. Blender (`Arthur_rigged.blend`): import any new Mixamo clips as `MIX_*`, then
    `blender_lockon_set.build(out_dir=...\ArthurAdv\pipeline\anims)`.
