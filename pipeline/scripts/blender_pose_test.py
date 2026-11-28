@@ -348,8 +348,18 @@ def _ground(arm, meshes):
 
 
 # --------------------------------------------------------------------- main
-def run(meshes, armature, out_dir=None, name="character", poses=None, render=True, limits=None):
+REFERENCE = os.path.join(os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else ".",
+                         "..", "style", "pose_reference_manny.json")
+
+
+def run(meshes, armature, out_dir=None, name="character", poses=None, render=True, limits=None,
+        reference=REFERENCE):
+    """reference: Manny's results for the same suite (file or dict, None to skip). A character is
+    only flagged where it does worse than Manny; what Manny does too is reported as a note."""
     lim = dict(LIMITS, **(limits or {}))
+    if isinstance(reference, str):
+        reference = json.load(open(reference)) if os.path.exists(reference) else None
+    refp = (reference or {}).get("poses", {})
     objs = [bpy.data.objects[m] if isinstance(m, str) else m for m in meshes]
     arm = bpy.data.objects[armature] if isinstance(armature, str) else armature
     arm_loc = arm.location.copy()
@@ -360,6 +370,8 @@ def run(meshes, armature, out_dir=None, name="character", poses=None, render=Tru
     rep = {"name": name, "checks": [], "measured": {"poses": {}}, "limits": lim}
 
     def res(check, status, detail, value=None, pose=None):
+        if status == "ASK" and pose and check in refp.get(pose, {}).get("pairs", []):
+            status, detail = "INFO", detail + " (Manny does this too in this test pose)"
         rep["checks"].append({"check": check, "status": status, "detail": detail,
                               "value": value, "pose": pose})
 
@@ -424,6 +436,10 @@ def run(meshes, armature, out_dir=None, name="character", poses=None, render=Tru
     # ---- every pose
     for pname in poses:
         plim = dict(lim, **POSE_LIMITS.get(pname, {}))
+        rp = refp.get(pname)
+        if rp:  # never stricter than what Manny itself needs (+10% stretch / -10% squash)
+            plim["stretch_p99_max"] = max(plim["stretch_p99_max"], round(rp["stretch_p99"] * 1.1, 3))
+            plim["squash_p1_min"] = min(plim["squash_p1_min"], round(rp["squash_p1"] * 0.9, 3))
         apply_pose(arm, POSES[pname])
         posed = _evaluated(objs)
         pm = {}

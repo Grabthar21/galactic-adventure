@@ -1,0 +1,51 @@
+{
+  "_what": "Manny (UE5 mannequin) through the same pose suite, measured on Henry 27 Nov 2026. Issues Manny also has come from the test poses, not the character, so they are reported as notes.",
+  "height_m": 1.8054,
+  "poses": {
+    "rest": {
+      "stretch_p99": 1.0,
+      "squash_p1": 1.0,
+      "pairs": []
+    },
+    "walk": {
+      "stretch_p99": 1.134,
+      "squash_p1": 0.897,
+      "pairs": []
+    },
+    "run": {
+      "stretch_p99": 1.35,
+      "squash_p1": 0.75,
+      "pairs": []
+    },
+    "crouch": {
+      "stretch_p99": 1.354,
+      "squash_p1": 0.694,
+      "pairs": []
+    },
+    "arms_up": {
+      "stretch_p99": 1.467,
+      "squash_p1": 0.548,
+      "pairs": []
+    },
+    "sword_ready": {
+      "stretch_p99": 1.234,
+      "squash_p1": 0.821,
+      "pairs": []
+    },
+    "slash": {
+      "stretch_p99": 1.296,
+      "squash_p1": 0.8,
+      "pairs": [
+        "forearm_r through torso"
+      ]
+    },
+    "fist": {
+      "stretch_p99": 1.638,
+      "squash_p1": 0.675,
+      "pairs": [
+        "thumb_l through index_l",
+        "thumb_r through index_r"
+      ]
+    }
+  }
+}
