@@ -12,7 +12,7 @@ blueprint's montage changed and nothing told us.
     fp.record(r"C:/.../pipeline/entries/arthur.json")    # at approval, stores entry["approved_ue"]
     print(fp.compare(r"C:/.../pipeline/entries/arthur.json"))  # any time later
 
-Paths come from entry["protect"]["unreal"]. Written for UE 5.4; not yet run on Henry.
+Paths come from entry["protect"]["unreal"]. Tested on Henry (UE 5.4.4) on Arthur, 27 Nov 2026.
 """
 import json
 
@@ -66,6 +66,23 @@ def skeletal_mesh(path):
     return out
 
 
+def _instance_attach(path):
+    """Which bone each component hangs on. UE 5.4 Python can't read this from the blueprint
+    itself, so a temporary copy is spawned far below the level, read, and removed again
+    (the open level is marked changed; nothing is saved)."""
+    eas = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    cls = EAL.load_blueprint_class(path)
+    a = eas.spawn_actor_from_class(cls, unreal.Vector(0, 0, -100000))
+    out = {}
+    try:
+        for c in a.get_components_by_class(unreal.SceneComponent):
+            p = c.get_attach_parent()
+            out[c.get_name()] = f"{p.get_name() if p else None}:{c.get_attach_socket_name()}"
+    finally:
+        eas.destroy_actor(a)
+    return out
+
+
 def blueprint(path):
     bp = EAL.load_asset(path)
     out = {"type": "Blueprint", "uses": _deps(path.split(".")[0])}
@@ -114,6 +131,10 @@ def blueprint(path):
     except Exception as e:
         comps.append({"error": str(e)})
     out["components"] = sorted(comps, key=lambda c: c.get("name", ""))
+    try:
+        out["attached_to"] = _instance_attach(path)
+    except Exception as e:
+        out["attached_to"] = f"error: {e}"
     return out
 
 
