@@ -203,7 +203,7 @@ def _vertex_groups(o):
     return groups, fingers
 
 
-def _penetration(verts, faces, groups, a, b, depth, skip=frozenset()):
+def _penetration(verts, faces, groups, a, b, depth, skip=frozenset(), radius=0.08):
     """Vertices of part a that are more than `depth` inside part b's surface.
     Returns (count, worst depth, part size, set of vertex indices)."""
     fb = [f for f in faces if all(groups[i] == b for i in f)]
@@ -213,12 +213,18 @@ def _penetration(verts, faces, groups, a, b, depth, skip=frozenset()):
     tree = BVHTree.FromPolygons(verts, fb, all_triangles=False)
     n, worst, hits = 0, 0.0, set()
     for i in va:
-        hit = tree.find_nearest(verts[i], abs(depth) * 12 + 1e-4)
+        hit = tree.find_nearest(verts[i], radius)
         if hit[0] is None:
             continue
         loc, nor, _, dist = hit
         inside = (verts[i] - loc).dot(nor)
-        if inside < -depth:
+        # only a point straight under the nearest surface counts (a far face whose normal
+        # happens to point away is not 'inside')
+        if depth >= 0:
+            hit_ok = inside < -depth and dist < abs(inside) * 1.3 + 1e-4
+        else:  # 'near' mode: on the surface (within -depth) or under it
+            hit_ok = dist < -depth or (inside < 0 and dist < abs(inside) * 1.3 + 1e-4)
+        if hit_ok:
             n += 1
             hits.add(i)
             worst = max(worst, -inside)
@@ -270,10 +276,12 @@ def _foot_direction(verts, groups, part):
 
 
 def _arm_angle(arm, side):
+    """Shoulder joint to elbow joint (UE bones in Blender don't point along the limb)."""
     b = arm.pose.bones.get(f"upperarm_{side}")
-    if not b:
+    c = arm.pose.bones.get(f"lowerarm_{side}")
+    if not b or not c:
         return None
-    d = (arm.matrix_world @ b.tail) - (arm.matrix_world @ b.head)
+    d = (arm.matrix_world @ c.head) - (arm.matrix_world @ b.head)
     return math.degrees(math.atan2(math.hypot(d.x, d.y), -d.z))
 
 
@@ -427,7 +435,7 @@ def run(meshes, armature, out_dir=None, name="character", poses=None, render=Tru
                     for i in range(len(names) - 1):
                         n, worst, total, _ = _penetration(verts, faces, fg, names[i], names[i + 1], depth * 0.5,
                                                           baseline.get((o.name, "fing", names[i]), frozenset()))
-                        if total and n / total > 0.02:
+                        if total and n >= 3 and n / total > 0.02:
                             res(f"{names[i]} through {names[i + 1]}", "ASK",
                                 f"{n} vertices up to {cm(worst)} inside the next finger", n / total, pname)
             lo, hi, mn, mx = _stretch(rverts, verts, edges)

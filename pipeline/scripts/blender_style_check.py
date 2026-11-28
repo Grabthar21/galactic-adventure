@@ -63,11 +63,15 @@ def _bone(arm, *names):
     return None
 
 
-def _bone_len(arm, *names):
-    b = _bone(arm, *names)
-    if not b:
+def _bone_len(arm, name):
+    """Joint to next joint (UE-imported bones don't point along the limb, so tails are useless)."""
+    nxt = {"upperarm": "lowerarm", "lowerarm": "hand", "thigh": "calf", "calf": "foot"}
+    base, side = name.rsplit("_", 1)
+    b = _bone(arm, name)
+    c = _bone(arm, f"{nxt.get(base, '')}_{side}")
+    if not b or not c:
         return None
-    return (arm.matrix_world @ b.tail_local - arm.matrix_world @ b.head_local).length
+    return (arm.matrix_world @ c.head_local - arm.matrix_world @ b.head_local).length
 
 
 # ------------------------------------------------------------------ proportions
