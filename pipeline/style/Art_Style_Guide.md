@@ -64,8 +64,20 @@ Rules:
 - **One shared character material in Unreal (planned: `M_Character_Master`).** Every character becomes an instance of it, with the same dials for colour, shading softness and rim light. To change the look of all characters, change the master once.
 
 ## 6. Faces
+**Face proportions** (fractions of face width at eye level, measured straight-on; reference: Link, Ocarina of Time remake; Arthur matched 27 Nov):
+
+| Feature | Target | Arthur |
+|---|---|---|
+| Mouth width | 0.30–0.36 (Link 0.33) | 0.33 |
+| Eye to mouth | 0.41–0.47 (Link 0.44) | 0.44 |
+| Mouth to chin | 0.22–0.28 (Link 0.25) | 0.25 |
+| Upper / lower lip | ~0.03 / ~0.05 | 0.030 / 0.048 |
+| Eye width, eye corners, nose width, eye to chin | as Link (0.27, 0.28/0.81, 0.25, 0.68) | match |
+
+Arthur keeps his own narrower jaw (0.72 vs Link 0.87), slightly closer eyes (0.51 vs 0.54) and higher brows (0.18 vs 0.15) as part of his design.
+
 **Always:**
-- A small, closed or nearly closed mouth. A smile is shown by the mouth's shape, not by an open grin.
+- A small, closed or nearly closed mouth, about one-third of the face width, **with real lips**: a shaped upper lip with a slight bow and a fuller lower lip, not just a line. A smile is shown by the mouth's shape, not by an open grin.
 - Simple painted eyes, slightly large, with **one small highlight per eye, on the same side in both eyes**.
 - Clean eye whites, with no skin or brown colour bleeding into them.
 - Both eyes the same size and height (within 5%).
@@ -142,3 +154,6 @@ The prompt describes the style instead of naming another game, so the generator 
 | 27 Nov | Duck-footed walk (boots turned out 25–30°) | Generate with feet straight forward; rig to Manny's foot angle |
 | 27 Nov | Hands crossing in the walk | A-pose at about 30°; match Manny's arm angle at rig time |
 | 14 Nov | Shiny skin and cloth in Unreal | Matte: roughness 0.85, specular 0.25 |
+| 27 Nov | Mouth too wide (0.64 of face width) and a thin smeared line | Mouth ~0.33 of face width, eye-to-mouth 0.44, real lips (upper ~0.03, lower ~0.05) |
+| 27 Nov | Painting a shorter line didn't narrow a carved smile | Mouth width lives in the shape: change the geometry (or regenerate), not just the paint |
+| 27 Nov | Lips painted on a flat surface read weakly | Give small features volume with a normal map on their own material |

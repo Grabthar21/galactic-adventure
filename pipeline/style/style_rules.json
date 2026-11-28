@@ -108,11 +108,63 @@
     "eye_texture_min": 512,
     "checklist": [
       "Mouth closed or small; no teeth or inner mouth showing through the lips",
+      "Mouth about one-third of face width, with real lips (upper ~0.03, lower ~0.05 of face width), not a single line",
       "Eye shine is one small painted highlight per eye, same side on both eyes, no glossy 'wet' reflection",
       "Eye whites clean: no skin or brown colour bleeding into them",
       "Both eyes the same size and height (within 5%)",
       "Brows readable from the gameplay camera"
-    ]
+    ],
+    "proportions": {
+      "_how": "Fractions of face width at eye level, measured on a straight-on render. Reference: Link (Ocarina of Time remake key art) measured 27 Nov 2026; Arthur matched for the mouth.",
+      "mouth_width": [
+        0.3,
+        0.36
+      ],
+      "eye_to_mouth": [
+        0.41,
+        0.47
+      ],
+      "mouth_to_chin": [
+        0.22,
+        0.28
+      ],
+      "upper_lip": [
+        0.025,
+        0.035
+      ],
+      "lower_lip": [
+        0.04,
+        0.055
+      ],
+      "reference_values": {
+        "link": {
+          "mouth_width": 0.33,
+          "eye_to_mouth": 0.44,
+          "mouth_to_chin": 0.25,
+          "upper_lip": 0.03,
+          "lower_lip": 0.05,
+          "eye_width": 0.27,
+          "eye_spacing": 0.54,
+          "nose_width": 0.25,
+          "eye_to_chin": 0.68,
+          "brow_above_eye": 0.15,
+          "jaw_at_mouth": 0.87
+        },
+        "arthur": {
+          "mouth_width": 0.33,
+          "eye_to_mouth": 0.44,
+          "mouth_to_chin": 0.25,
+          "upper_lip": 0.03,
+          "lower_lip": 0.048,
+          "eye_width": 0.27,
+          "eye_spacing": 0.51,
+          "nose_width": 0.25,
+          "eye_to_chin": 0.69,
+          "brow_above_eye": 0.18,
+          "jaw_at_mouth": 0.72
+        }
+      }
+    }
   },
   "review": {
     "turnaround": [

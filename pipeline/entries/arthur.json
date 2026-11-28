@@ -40,9 +40,10 @@
     "skeleton": "/Game/Characters/Mannequins/Meshes/SK_Mannequin (shared with Manny)",
     "materials": [
       "M_Arthur",
-      "M_Arthur_Eyes"
+      "M_Arthur_Eyes",
+      "M_Arthur_Mouth"
     ],
-    "material_slots": 2
+    "material_slots": 3
   },
   "pipeline": {
     "import_check": {
@@ -61,7 +62,9 @@
       "2026-11-26: cleanup. 191,104 -> 39,329 triangles (head pass 0.35, body 0.175), 16 debris pieces removed, scaled to 160 cm, textures 4K -> 2K. Face visually unchanged. Not yet in Unreal.",
       "2026-11-26: face approved (eyes rebuilt as own material, current mouth kept). Rigged on SK_Mannequin, rest pose matched to Manny's A-pose, imported to /Game/Characters/ArthurPipeline with 3 LODs. Final check: all pass.",
       "2026-11-26: fingers weighted (55 deforming bones); SwordHand re-fitted (same 7.3 cm offset from the hand as before); SK_Arthur re-imported clean with 2 material slots, 3 LODs, root scale 1.",
-      "2026-11-27: entry set up for the report card and approved-asset protection; stage 'review' until the user approves v1 (approval fingerprints and locks the files above)"
+      "2026-11-27: entry set up for the report card and approved-asset protection; stage 'review' until the user approves v1 (approval fingerprints and locks the files above)",
+      "2026-11-27: mouth rebuilt to Link's proportions (user-approved): width 0.33 of face width (was 0.64), 6 mm lower (eye-to-mouth 0.44), lips upper 4.3 mm / lower 6.8 mm with a bow. Old carved smile flattened (depth-only moves), 15 backwards faces flipped, mouth area on its own material M_Arthur_Mouth (T_Arthur_Mouth 1024x352 + normal map T_Arthur_Mouth_N for lip volume); mouth faces use planar UVs in UVMap. Jaw, eyes and design kept.",
+      "2026-11-27: re-exported (matches previous FBX in skeleton, scale, root, pelvis/hand positions, size; +1 material) and re-imported via fresh import, consolidate, rename: SK_Arthur 3 slots, LODs 32549/9375/5360 verts, 160.6 cm, BP_Arthur swords pelvis/spine_05/hand_r. Backups: Arthur_rigged_before_linkmouth.blend, SK_Arthur_before_linkmouth.fbx. Report card re-run: unchanged except mouth texture (passes)."
     ],
     "blender_check": {
       "date": "2026-11-26",
@@ -112,7 +115,9 @@
       "C:\\Users\\johnn\\Documents\\SpacePiece_Blender\\ArthurAdv\\pipeline\\T_Arthur_D_v2.jpg",
       "C:\\Users\\johnn\\Documents\\SpacePiece_Blender\\ArthurAdv\\pipeline\\T_Arthur_N.png",
       "C:\\Users\\johnn\\Documents\\SpacePiece_Blender\\ArthurAdv\\pipeline\\T_Arthur_RM_v2.jpg",
-      "C:\\Users\\johnn\\Documents\\SpacePiece_Blender\\ArthurAdv\\pipeline\\T_Arthur_Eyes.png"
+      "C:\\Users\\johnn\\Documents\\SpacePiece_Blender\\ArthurAdv\\pipeline\\T_Arthur_Eyes.png",
+      "C:\\Users\\johnn\\Documents\\SpacePiece_Blender\\ArthurAdv\\pipeline\\T_Arthur_Mouth.png",
+      "C:\\Users\\johnn\\Documents\\SpacePiece_Blender\\ArthurAdv\\pipeline\\T_Arthur_Mouth_N.png"
     ],
     "unreal": [
       "/Game/Characters/ArthurPipeline/SK_Arthur",
@@ -125,7 +130,10 @@
       "/Game/Characters/ArthurPipeline/ABP_Arthur",
       "/Game/Characters/ArthurPipeline/BP_Arthur",
       "/Game/Characters/ArthurPipeline/RTG_ArthurAdv_to_Arthur",
-      "/Game/Characters/ArthurPipeline/Sword/AM_Slash_Outward_Fast"
+      "/Game/Characters/ArthurPipeline/Sword/AM_Slash_Outward_Fast",
+      "/Game/Characters/ArthurPipeline/M_Arthur_Mouth",
+      "/Game/Characters/ArthurPipeline/T_Arthur_Mouth",
+      "/Game/Characters/ArthurPipeline/T_Arthur_Mouth_N"
     ],
     "content_root": "C:\\Users\\johnn\\Documents\\Unreal Projects\\SpacePiece3D\\Content"
   }

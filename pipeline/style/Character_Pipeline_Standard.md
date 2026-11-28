@@ -1,4 +1,4 @@
-# Space Piece — Character & Creature Pipeline Standard (v0.8, 27 Nov 2026)
+# Space Piece — Character & Creature Pipeline Standard (v0.9, 27 Nov 2026)
 
 Status: **biped pilot passed (Arthur, playable); quadruped standard approved 27 Nov (first real creature: a wolf)**. Numbers come from `SpacePiece3D` (UE 5.4.4). Full pilot logs: `pipeline/reports/` in the `galactic-adventure` repo (branch `pipeline-standard`).
 
@@ -37,6 +37,7 @@ Art direction: **stylised, closer to Zelda** — clean readable shapes, painted/
 | Creature | 5–15k (large/hero creature up to 25k); up to 10% over = warning | 2+ | ≤ 3 | archetype standard (+ add-ons) |
 | Attachment (tusks, weapons, hats) | ≤ 2k | 1–3 | 1 | none / socket |
 
+- **Small face features get their own material when they need fixing** (Arthur: eyes `M_Arthur_Eyes`, mouth `M_Arthur_Mouth` with a normal map). Planar-projected UVs for those faces go in the first UV map, because Unreal builds normal-map tangents from UV channel 0.
 - **Eyes get their own material and texture** on hero characters (generators give each eye only a tiny patch of the main texture). Arthur: `M_Arthur_Eyes`, 1024×512.
 - **Hero status is set by the user**; heroes get the higher budget and stay on ask-first for any fix that changes their look.
 
@@ -84,6 +85,7 @@ Previews are judged under even lighting with backface culling on (Eevee), never 
 ## 8. Pilot results
 - **Arthur (biped, hero) — passed, playable.** Source Tripo GLB 191k → 39.3k triangles; eyes rebuilt as own material; mouth kept as approved; rigged on `SK_Mannequin` with fingers (55 deforming bones); arms and feet matched to Manny's rest pose; 160 cm, root scale 1, 2 material slots, LODs 28.7k/7.7k/4.3k verts. `BP_Arthur` uses Manny's own locomotion and `ABP_Arthur`; sword clips retargeted into `ArthurPipeline/Sword`; hip, back and hand swords fitted. Game mode default pawn = `BP_Arthur`; old character kept as `BP_ArthurAdvCharacter_Legacy`.
   - Open: full fist shows small gaps between the fused fingers; Zelda-style mouth via a regenerated head when a Tripo generation is available; **the user approves v1** (`asset_guard approve`, then `ue_fingerprint.record`), which fingerprints and locks his files.
+  - **Mouth rebuilt to Link's proportions, 27 Nov (user-approved):** width 0.33 of face width (was 0.64), 6 mm lower, real lips (upper 4.3 mm, lower 6.8 mm, normal map for volume) on its own material `M_Arthur_Mouth`; old carved smile flattened with depth-only moves (sideways moves tore holes in the loose face pieces). Re-exported and re-imported (fresh import, consolidate, rename): 3 slots, LODs 32.5k/9.4k/5.4k verts. Backups `Arthur_rigged_before_linkmouth.blend`, `SK_Arthur_before_linkmouth.fbx`.
   - **Report card run on Arthur, 27 Nov (Henry, 60 s):** style all pass (head 0.150, arm 0.244, leg 0.434; saturation 0.71; painted-look noise 0.013); face checklist for the user; rest pose matches Manny (arm 35.2°, feet 15/16.5° vs Manny 3° on the sole outline). Flags: deep crouch, thighs press 7 cm into each other (baggy trousers); arms straight up, upper arms dip ~6 cm into the hair; fist, fused-finger overlap (known). 364 px tall from the play camera. Card: `pipeline/reports/arthur_2026-11-27/`.
   - **Calibrated on Arthur and Manny:** foot limit 20° (sole outline: Manny 3, Arthur 15–16.5, Arthur before the fix ~35–40); arm angle and limb lengths measured joint to joint (UE bones in Blender don't point along the limb); colour strength 0.18–0.80; painted-look noise max 0.035; eye textures exempt from dark/bright/colour checks; poses compared with Manny's own results (`style/pose_reference_manny.json`): what Manny also does is a note, not a question.
   - **Unreal fingerprint tested on Arthur:** mesh (3 LODs, 2 slots), BP_Arthur (ABP_Arthur, AM_Slash_Outward_Fast, capsule 80/35, swords on pelvis / spine_05 / hand_r), repeatable, and catches a swapped montage or moved sword.
