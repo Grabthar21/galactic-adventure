@@ -25,7 +25,7 @@ from mathutils.bvhtree import BVHTree
 
 # --------------------------------------------------------------------- limits
 LIMITS = {
-    "foot_out_max_deg": 12.0,       # Manny ~6.5 deg; Arthur was 25-30 before the fix
+    "foot_out_max_deg": 20.0,       # sole outline: Manny 3, approved Arthur 15-16.5, Arthur before the fix ~35-40
     "arm_angle_deg": [15.0, 50.0],  # upper arm from vertical in the rest pose (A-pose)
     "hand_clearance_frac": 0.012,   # rest: hand at least ~2 cm (on 160 cm) from thigh/hip
     "ground_tol_frac": 0.012,       # supporting foot within ~2 cm of the ground
@@ -179,17 +179,28 @@ def _evaluated(meshes):
     return out
 
 
+PREFIX = [("upperarm", "upperarm"), ("lowerarm", "forearm"), ("hand", "hand"), ("thigh", "leg"),
+          ("calf", "leg"), ("foot", "foot"), ("ball", "foot"), ("clavicle", "torso"), ("spine", "torso"),
+          ("pelvis", "torso"), ("neck", "head"), ("head", "head")]
+
+
+def _group_of(bone):
+    """Body part of a bone, twist/corrective bones included (Manny: thigh_twist_01_l -> leg_l)."""
+    for f in FINGERS:
+        if bone.startswith(f):
+            return f"hand_{bone[-1]}" if bone[-2:] in ("_l", "_r") else None
+    for pre, part in PREFIX:
+        if bone.startswith(pre):
+            if part in ("torso", "head"):
+                return part
+            if bone[-2:] in ("_l", "_r"):
+                return f"{part}_{bone[-1]}"
+    return None
+
+
 def _vertex_groups(o):
     """Group (body part) of each vertex: the body part of its strongest bone."""
-    bone_to_group = {}
-    for g, bones in GROUPS.items():
-        for b in bones:
-            bone_to_group[b] = g
-    for f in FINGERS:
-        for s in ("l", "r"):
-            for i in (1, 2, 3):
-                bone_to_group[f"{f}_0{i}_{s}"] = f"hand_{s}"
-    idx_to_group = {vg.index: bone_to_group.get(vg.name) for vg in o.vertex_groups}
+    idx_to_group = {vg.index: _group_of(vg.name) for vg in o.vertex_groups}
     finger_of = {vg.index: next((f"{f}_{vg.name[-1]}" for f in FINGERS if vg.name.startswith(f)), None)
                  for vg in o.vertex_groups}
     groups, fingers = [], []
@@ -372,7 +383,7 @@ def run(meshes, armature, out_dir=None, name="character", poses=None, render=Tru
             rep["measured"][f"foot_out_{part}"] = round(t, 1)
             ok = abs(t) <= lim["foot_out_max_deg"]
             res(f"foot direction {part[-1]}", "PASS" if ok else "ASK",
-                f"toes turned {'out' if t >= 0 else 'in'} {abs(t):.1f} deg (max {lim['foot_out_max_deg']:.0f}; Manny ~6.5)"
+                f"toes turned {'out' if t >= 0 else 'in'} {abs(t):.1f} deg (max {lim['foot_out_max_deg']:.0f}; Manny 3, Arthur 15-16)"
                 + ("" if ok else " - will walk duck-footed / pigeon-toed; rotate the leg in the rest pose"), t, "rest")
         for side in ("l", "r"):
             d = _min_dist(verts, g, f"hand_{side}", ["leg_l", "leg_r", "torso"])
