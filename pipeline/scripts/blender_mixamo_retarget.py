@@ -13,6 +13,11 @@ Method (proven on Arthur's sword clips, rewritten 27 Nov 2026):
     import blender_mixamo_retarget as R
     act = R.retarget(src_armature, dst_armature, name="A_Arthur_DodgeRoll", frames=(1, 49))
     R.export_action(dst_armature, act, r"C:/.../A_Arthur_DodgeRoll.fbx")
+
+Locomotion loops (strafe, walk back) for blend spaces: in_place=True removes the clip's
+travel so the character stays put (the movement component moves him in game).
+mirror=True gives the other side (strafe left -> strafe right), mirrored across the
+character's own left/right plane.
 """
 import bpy
 from mathutils import Matrix, Quaternion, Vector
@@ -59,8 +64,28 @@ def _world_rest(arm, bone):
     return m.to_translation(), m.to_quaternion().normalized()
 
 
-def retarget(src, dst, name, frames=None, root_motion=True, scale=None):
+def _swap_side(name):
+    if "Left" in name:
+        return name.replace("Left", "Right")
+    if "Right" in name:
+        return name.replace("Right", "Left")
+    return name
+
+
+def _reflect(S, c, m):
+    """World matrix m mirrored by reflection S (3x3) through point c; result stays a rotation."""
+    r = S @ m.to_3x3() @ S
+    t = m.to_translation()
+    t = c + S @ (t - c)
+    out = r.to_4x4()
+    out.translation = t
+    return out
+
+
+def retarget(src, dst, name, frames=None, root_motion=True, scale=None, in_place=False, mirror=False):
     scn = bpy.context.scene
+    if in_place:
+        root_motion = False
     act_src = src.animation_data.action
     f0, f1 = frames or (int(act_src.frame_range[0]), int(act_src.frame_range[1]))
     pairs = {}
@@ -95,6 +120,30 @@ def retarget(src, dst, name, frames=None, root_motion=True, scale=None):
                 align[t] = qt
     src_rest = {s: _world_rest(src, s)[1] for s in pairs.values()}
     hips = pairs["pelvis"]
+    S = c_mirror = None
+    if mirror:
+        # left/right axis of the source character, from its hip joints
+        lt, rt = _src_name(src, "LeftUpLeg"), _src_name(src, "RightUpLeg")
+        lat = _world_rest(src, lt)[0] - _world_rest(src, rt)[0]
+        lat.z = 0
+        lat.normalize()
+        S = Matrix.Identity(3) - 2 * Matrix(((lat.x * lat.x, lat.x * lat.y, 0), (lat.y * lat.x, lat.y * lat.y, 0), (0, 0, 0)))
+        scn.frame_set(f0)
+        c_mirror = (src.matrix_world @ src.pose.bones[hips].matrix).to_translation()
+        src_rest = {s: (S @ _world_rest(src, _swap_side(s))[1].to_matrix() @ S).to_quaternion().normalized()
+                    for s in pairs.values()}
+
+    def src_world(f):
+        scn.frame_set(f)
+        raw = {s: (src.matrix_world @ src.pose.bones[s].matrix) for s in pairs.values()}
+        if not mirror:
+            return raw
+        return {s: _reflect(S, c_mirror, raw[_swap_side(s)]) for s in pairs.values()}
+
+    drift = Vector((0, 0, 0))
+    if in_place and f1 > f0:
+        drift = src_world(f1)[hips].to_translation() - src_world(f0)[hips].to_translation()
+        drift.z = 0
     hips_rest_pos, _ = _world_rest(src, hips)
     pel_rest_pos, _ = _world_rest(dst, "pelvis")
     k = scale or (pel_rest_pos.z / hips_rest_pos.z)
@@ -111,9 +160,8 @@ def retarget(src, dst, name, frames=None, root_motion=True, scale=None):
     rest_local = {b.name: b.bone.matrix_local.copy() for b in order}
     start_hips = None
     for f in range(f0, f1 + 1):
-        scn.frame_set(f)
-        sw = {s: (src.matrix_world @ src.pose.bones[s].matrix) for s in pairs.values()}
-        hips_pos = sw[hips].to_translation()
+        sw = src_world(f)
+        hips_pos = sw[hips].to_translation() - drift * ((f - f0) / max(1, f1 - f0))
         if start_hips is None:
             start_hips = hips_pos.copy()
         A = {}  # armature-space pose matrices of the target
